@@ -241,12 +241,12 @@ function updateOnlineStatus() {
     const statusText = document.getElementById('statusText');
     
     if (navigator.onLine) {
-        indicator.className = 'online-indicator online';
-        statusText.textContent = 'Online';
+        if (indicator) indicator.className = 'online-indicator online';
+        if (statusText) statusText.textContent = 'Online';
         syncAll();
     } else {
-        indicator.className = 'online-indicator offline';
-        statusText.textContent = 'Offline';
+        if (indicator) indicator.className = 'online-indicator offline';
+        if (statusText) statusText.textContent = 'Offline';
     }
 }
 
@@ -256,11 +256,13 @@ async function updatePendingCount() {
         const count = entries.length;
         const badge = document.getElementById('pendingBadge');
         
-        if (count > 0) {
-            badge.textContent = count;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
         }
     } catch (error) {
         console.error('Fehler beim Aktualisieren der Pending-Anzahl:', error);
