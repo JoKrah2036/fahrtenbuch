@@ -7,7 +7,7 @@
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
     VERSION: '2.0',
-    SYNC_URL: 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER', // ⚠️ HIER DEINE GOOGLE APPS SCRIPT URL EINTRAGEN!
+    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
     DB_NAME: 'FahrtenbuchDB',
     DB_VERSION: 2, // Version erhöht wegen Schema-Änderung
     STORE_NAME: 'entries'
