@@ -13,183 +13,195 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
-            display: flex;
-            flex-direction: column;
         }
-        
+
         .container {
-            max-width: 500px;
+            max-width: 600px;
             margin: 0 auto;
-            width: 100%;
         }
-        
+
         .header {
             text-align: center;
             color: white;
             margin-bottom: 30px;
         }
-        
+
         .header h1 {
-            font-size: 28px;
+            font-size: 2em;
             margin-bottom: 10px;
         }
-        
+
         .status {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
             background: rgba(255, 255, 255, 0.2);
             padding: 8px 16px;
             border-radius: 20px;
-            font-size: 14px;
+            font-size: 0.9em;
         }
-        
-        .status-indicator {
+
+        .status-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
+            margin-right: 8px;
             background: #4ade80;
         }
-        
-        .status-indicator.offline {
+
+        .status-dot.offline {
             background: #fbbf24;
         }
-        
+
+        .install-prompt {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .install-prompt h3 {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .install-prompt p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .install-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
         .card {
             background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
+
         label {
             display: block;
-            font-weight: 600;
-            color: #374151;
             margin-bottom: 8px;
-            font-size: 14px;
+            color: #333;
+            font-weight: 500;
         }
-        
+
         input, textarea {
             width: 100%;
             padding: 12px;
             border: 2px solid #e5e7eb;
             border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.2s;
-            font-family: inherit;
+            font-size: 1em;
+            transition: border-color 0.3s;
         }
-        
+
         input:focus, textarea:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         textarea {
             resize: vertical;
             min-height: 80px;
         }
-        
+
         .button-group {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            margin-top: 30px;
         }
-        
+
         button {
             flex: 1;
             padding: 14px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 1em;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.2s;
+            transition: transform 0.2s;
         }
-        
+
         button:active {
             transform: scale(0.98);
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
-        
+
         .btn-secondary {
             background: #f3f4f6;
-            color: #374151;
+            color: #666;
         }
-        
-        .pending-count {
+
+        .sync-info {
             text-align: center;
             color: white;
-            font-size: 14px;
-            margin-top: 16px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 8px;
-        }
-        
-        .pending-count strong {
-            font-size: 24px;
-            display: block;
-            margin-bottom: 4px;
-        }
-        
-        .notification {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-100px);
-            background: white;
-            padding: 16px 24px;
-            border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            z-index: 1000;
-            transition: transform 0.3s;
-            max-width: 90%;
-        }
-        
-        .notification.show {
-            transform: translateX(-50%) translateY(0);
-        }
-        
-        .notification.success {
-            border-left: 4px solid #10b981;
-        }
-        
-        .notification.error {
-            border-left: 4px solid #ef4444;
-        }
-        
-        .notification.info {
-            border-left: 4px solid #3b82f6;
+            margin-top: 20px;
+            font-size: 0.9em;
         }
 
-        .install-prompt {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 16px;
+        .success-message {
+            background: #10b981;
+            color: white;
+            padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: none;
         }
 
-        .install-prompt button {
-            margin-top: 12px;
-            width: 100%;
+        .error-message {
+            background: #ef4444;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: white;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -198,66 +210,84 @@
         <div class="header">
             <h1>🚗 Fahrtenbuch</h1>
             <div class="status">
-                <span class="status-indicator" id="statusIndicator"></span>
+                <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Online</span>
             </div>
         </div>
 
-        <div id="installPrompt" class="install-prompt" style="display: none;">
-            <p><strong>📱 Als App installieren</strong></p>
-            <p style="margin: 8px 0; font-size: 14px;">Installiere das Fahrtenbuch auf deinem Startbildschirm für schnellen Zugriff!</p>
-            <button class="btn-primary" id="installButton">Jetzt installieren</button>
+        <div class="install-prompt" id="installPrompt" style="display: none;">
+            <h3>📱 Als App installieren</h3>
+            <p>Installiere das Fahrtenbuch auf deinem Startbildschirm für schnellen Zugriff!</p>
+            <button class="install-button" id="installButton">Jetzt installieren</button>
+        </div>
+
+        <div class="success-message" id="successMessage">
+            ✓ Eintrag erfolgreich gespeichert!
+        </div>
+
+        <div class="error-message" id="errorMessage">
+            ✗ Fehler beim Speichern. Wird erneut versucht...
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Wird gespeichert...</p>
         </div>
 
         <div class="card">
             <form id="fahrtenbuchForm">
                 <div class="form-group">
                     <label for="datum">Datum</label>
-                    <input type="date" id="datum" name="datum" required>
+                    <input type="date" id="datum" required>
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="km">Kilometer</label>
-                    <input type="number" id="km" name="km" step="0.1" placeholder="z.B. 45.5" required>
+                    <label for="kmStand">Km-Stand</label>
+                    <input type="number" id="kmStand" placeholder="z.B. 15234" step="1" required>
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="liter">Liter (optional)</label>
-                    <input type="number" id="liter" name="liter" step="0.01" placeholder="z.B. 5.50">
+                    <label for="kmTrip">Km-Trip</label>
+                    <input type="number" id="kmTrip" placeholder="z.B. 125" step="1" required>
                 </div>
-                
+
+                <div class="form-group">
+                    <label for="spritLiter">Sprit Liter</label>
+                    <input type="number" id="spritLiter" placeholder="z.B. 35,5" step="0.01" required>
+                </div>
+
                 <div class="form-group">
                     <label for="kosten">Kosten in € (optional)</label>
-                    <input type="number" id="kosten" name="kosten" step="0.01" placeholder="z.B. 8.50">
+                    <input type="number" id="kosten" placeholder="z.B. 55,00" step="0.01">
                 </div>
-                
+
                 <div class="form-group">
-                    <label for="zweck">Zweck der Fahrt</label>
-                    <textarea id="zweck" name="zweck" placeholder="z.B. Kundenbesuch, Dienstreise..." required></textarea>
+                    <label for="preisJeLiter">Preis je ltr. (optional)</label>
+                    <input type="number" id="preisJeLiter" placeholder="z.B. 1,55" step="0.001">
                 </div>
-                
+
+                <div class="form-group">
+                    <label for="tankstelle">Tankstelle (optional)</label>
+                    <input type="text" id="tankstelle" placeholder="z.B. Shell, Aral, Esso">
+                </div>
+
+                <div class="form-group">
+                    <label for="bemerkung">Bemerkung</label>
+                    <textarea id="bemerkung" placeholder="z.B. Kundenbesuch, Dienstfahrt, etc."></textarea>
+                </div>
+
                 <div class="button-group">
                     <button type="submit" class="btn-primary">Speichern</button>
-                    <button type="button" class="btn-secondary" id="resetBtn">Zurücksetzen</button>
+                    <button type="button" class="btn-secondary" id="resetButton">Zurücksetzen</button>
                 </div>
             </form>
         </div>
 
-        <div class="pending-count">
-            <strong id="pendingCount">0</strong>
-            <div id="pendingText">Einträge warten auf Synchronisation</div>
+        <div class="sync-info" id="syncInfo">
+            Alle Daten werden automatisch synchronisiert
         </div>
     </div>
 
-    <div class="notification" id="notification"></div>
-
     <script src="app.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then(reg => console.log('Service Worker registriert'))
-                .catch(err => console.log('Service Worker Fehler:', err));
-        }
-    </script>
 </body>
 </html>
