@@ -1,137 +1,402 @@
-/**
- * Google Apps Script für Fahrtenbuch PWA
- * Empfängt Daten von der PWA und schreibt sie ins Google Sheet
- * Mit deutscher Zahlenformatierung
- */
+// 🚗 Fahrtenbuch PWA - App Logic
+// Offline-fähiges Fahrtenbuch mit Google Sheets Sync
 
-function doPost(e) {
-  try {
-    // Sheet abrufen (verwendet das aktive Sheet)
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    // JSON-Daten parsen
-    const data = JSON.parse(e.postData.contents);
-    
-    // Daten extrahieren und in Zahlen konvertieren
-    const datum = data.datum || '';
-    const kmStand = data.kmStand ? parseFloat(data.kmStand) : '';
-    const kmTrip = data.kmTrip ? parseFloat(data.kmTrip) : '';
-    const spritLiter = data.spritLiter ? parseFloat(data.spritLiter) : '';
-    const kosten = data.kosten ? parseFloat(data.kosten) : '';
-    const preisJeLiter = data.preisJeLiter ? parseFloat(data.preisJeLiter) : '';
-    const tankstelle = data.tankstelle || '';
-    const bemerkung = data.bemerkung || '';
-    
-    // Neue Zeile hinzufügen
-    const newRow = sheet.appendRow([
-      datum,
-      kmStand,
-      kmTrip,
-      spritLiter,
-      kosten,
-      preisJeLiter,
-      tankstelle,
-      bemerkung
-    ]);
-    
-    // Formatierung anwenden (letzte Zeile)
-    const lastRow = sheet.getLastRow();
-    
-    // Spalte B (Km-Stand): Zahlenformat mit Tausenderpunkt, keine Dezimalstellen
-    if (kmStand) {
-      sheet.getRange(lastRow, 2).setNumberFormat('#,##0');
-    }
-    
-    // Spalte C (Km-Trip): Zahlenformat ohne Tausenderpunkt, keine Dezimalstellen
-    if (kmTrip) {
-      sheet.getRange(lastRow, 3).setNumberFormat('0');
-    }
-    
-    // Spalte D (Sprit Liter): Zahlenformat mit Komma, 2 Dezimalstellen
-    if (spritLiter) {
-      sheet.getRange(lastRow, 4).setNumberFormat('#,##0.00');
-    }
-    
-    // Spalte E (Kosten): Zahlenformat mit Komma, 2 Dezimalstellen
-    if (kosten) {
-      sheet.getRange(lastRow, 5).setNumberFormat('#,##0.00');
-    }
-    
-    // Spalte F (Preis je Liter): Zahlenformat mit Komma, 3 Dezimalstellen (für genaue Preise)
-    if (preisJeLiter) {
-      sheet.getRange(lastRow, 6).setNumberFormat('#,##0.000');
-    }
-    
-    // Erfolgreiche Antwort
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        'success': true,
-        'message': 'Eintrag gespeichert'
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch (error) {
-    // Fehler zurückgeben
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        'success': false,
-        'error': error.toString()
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+// ========================================
+// KONFIGURATION
+// ========================================
+const CONFIG = {
+    APP_NAME: 'Fahrtenbuch',
+    VERSION: '2.0',
+    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
+    DB_NAME: 'FahrtenbuchDB',
+    DB_VERSION: 2, // Version erhöht wegen Schema-Änderung
+    STORE_NAME: 'entries'
+};
+
+// ========================================
+// HILFSFUNKTIONEN
+// ========================================
 
 /**
- * Test-Funktion um zu prüfen, ob das Script funktioniert
- * Klicke auf "Ausführen" um einen Test-Eintrag zu erstellen
+ * Konvertiert deutsche Zahleneingabe zu standardisiertem Format
+ * Beispiele:
+ * "233.300" -> "233300" (Tausenderpunkt entfernen)
+ * "40,50" -> "40.50" (Komma zu Punkt)
+ * "1,499" -> "1.499" (Komma zu Punkt)
  */
-function testDoPost() {
-  const testData = {
-    postData: {
-      contents: JSON.stringify({
-        datum: '2026-02-05',
-        kmStand: '15000',
-        kmTrip: '150',
-        spritLiter: '40.5',
-        kosten: '60.75',
-        preisJeLiter: '1.499',
-        tankstelle: 'Shell',
-        bemerkung: 'Test-Eintrag mit Formatierung'
-      })
-    }
-  };
-  
-  const result = doPost(testData);
-  Logger.log(result.getContent());
+function parseGermanNumber(value) {
+    if (!value || value === '') return '';
+    
+    // Konvertiere zu String falls nötig
+    let str = value.toString().trim();
+    
+    // Entferne alle Punkte (Tausendertrennzeichen)
+    str = str.replace(/\./g, '');
+    
+    // Ersetze Komma durch Punkt (Dezimaltrennzeichen)
+    str = str.replace(',', '.');
+    
+    return str;
 }
 
-/**
- * Hilfsfunktion: Formatiere alle vorhandenen Zeilen
- * Führe diese Funktion einmal aus, um bereits vorhandene Daten zu formatieren
- */
-function formatiereAlleZeilen() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const lastRow = sheet.getLastRow();
-  
-  if (lastRow <= 1) {
-    Logger.log('Keine Daten zum Formatieren vorhanden');
-    return;
-  }
-  
-  // Formatiere Spalte B (Km-Stand): Tausenderpunkt
-  sheet.getRange(2, 2, lastRow - 1, 1).setNumberFormat('#,##0');
-  
-  // Formatiere Spalte C (Km-Trip): Ohne Tausenderpunkt
-  sheet.getRange(2, 3, lastRow - 1, 1).setNumberFormat('0');
-  
-  // Formatiere Spalte D (Sprit Liter): 2 Dezimalstellen
-  sheet.getRange(2, 4, lastRow - 1, 1).setNumberFormat('#,##0.00');
-  
-  // Formatiere Spalte E (Kosten): 2 Dezimalstellen
-  sheet.getRange(2, 5, lastRow - 1, 1).setNumberFormat('#,##0.00');
-  
-  // Formatiere Spalte F (Preis je Liter): 3 Dezimalstellen
-  sheet.getRange(2, 6, lastRow - 1, 1).setNumberFormat('#,##0.000');
-  
-  Logger.log(`${lastRow - 1} Zeilen formatiert`);
+// ========================================
+// INDEXEDDB SETUP
+// ========================================
+function openDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            
+            // Lösche alten Store falls vorhanden
+            if (db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                db.deleteObjectStore(CONFIG.STORE_NAME);
+            }
+
+            // Erstelle neuen Store
+            const store = db.createObjectStore(CONFIG.STORE_NAME, { 
+                keyPath: 'id', 
+                autoIncrement: true 
+            });
+            
+            // Erstelle Indices
+            store.createIndex('synced', 'synced', { unique: false });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            
+            console.log('Datenbank erstellt/aktualisiert');
+        };
+    });
 }
+
+// ========================================
+// DATENBANK OPERATIONEN
+// ========================================
+async function saveEntry(entry) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        
+        const request = store.add({
+            ...entry,
+            synced: false,
+            timestamp: new Date().toISOString()
+        });
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getUnsyncedEntries() {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            // Filtere nur ungesyncte Einträge
+            const allEntries = request.result || [];
+            const unsynced = allEntries.filter(entry => !entry.synced);
+            resolve(unsynced);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function markAsSynced(id) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        
+        const getRequest = store.get(id);
+        
+        getRequest.onsuccess = () => {
+            const entry = getRequest.result;
+            if (entry) {
+                entry.synced = true;
+                const updateRequest = store.put(entry);
+                updateRequest.onsuccess = () => resolve();
+                updateRequest.onerror = () => reject(updateRequest.error);
+            } else {
+                resolve();
+            }
+        };
+        
+        getRequest.onerror = () => reject(getRequest.error);
+    });
+}
+
+async function getAllEntries() {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// ========================================
+// GOOGLE SHEETS SYNCHRONISATION
+// ========================================
+async function syncToGoogleSheets(entry) {
+    if (CONFIG.SYNC_URL === 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER') {
+        console.warn('⚠️ Google Apps Script URL nicht konfiguriert!');
+        return false;
+    }
+
+    try {
+        const response = await fetch(CONFIG.SYNC_URL, {
+            method: 'POST',
+            mode: 'no-cors', // Wichtig für Google Apps Script!
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(entry)
+        });
+
+        // no-cors gibt immer status 0, das ist normal
+        console.log('✅ An Google Sheets gesendet:', entry);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Google Sheets Sync Fehler:', error);
+        return false;
+    }
+}
+
+async function syncAll() {
+    if (!navigator.onLine) {
+        console.log('⚠️ Offline - Sync übersprungen');
+        return;
+    }
+
+    try {
+        const entries = await getUnsyncedEntries();
+        
+        if (entries.length === 0) {
+            console.log('✅ Keine Einträge zum Synchronisieren');
+            return;
+        }
+
+        console.log(`🔄 Synchronisiere ${entries.length} Einträge...`);
+
+        for (const entry of entries) {
+            const success = await syncToGoogleSheets(entry);
+            if (success) {
+                await markAsSynced(entry.id);
+                console.log(`✅ Eintrag ${entry.id} synchronisiert`);
+            }
+        }
+
+        await updatePendingCount();
+        showNotification('✅ Synchronisation erfolgreich!', 'success');
+        
+    } catch (error) {
+        console.error('Synchronisierungsfehler:', error);
+        showNotification('⚠️ Synchronisierungsfehler', 'error');
+    }
+}
+
+// ========================================
+// UI FUNKTIONEN
+// ========================================
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function updateOnlineStatus() {
+    const indicator = document.getElementById('onlineStatus');
+    const statusText = document.getElementById('statusText');
+    
+    if (navigator.onLine) {
+        indicator.className = 'online-indicator online';
+        statusText.textContent = 'Online';
+        syncAll();
+    } else {
+        indicator.className = 'online-indicator offline';
+        statusText.textContent = 'Offline';
+    }
+}
+
+async function updatePendingCount() {
+    try {
+        const entries = await getUnsyncedEntries();
+        const count = entries.length;
+        const badge = document.getElementById('pendingBadge');
+        
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der Pending-Anzahl:', error);
+    }
+}
+
+// ========================================
+// FORMULAR HANDLING
+// ========================================
+async function handleSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const entry = {
+        datum: form.datum.value,
+        kmStand: parseGermanNumber(form.kmStand.value),
+        kmTrip: parseGermanNumber(form.kmTrip.value),
+        spritLiter: parseGermanNumber(form.spritLiter.value),
+        kosten: parseGermanNumber(form.kosten.value),
+        preisJeLiter: parseGermanNumber(form.preisJeLiter.value),
+        tankstelle: form.tankstelle.value,
+        bemerkung: form.bemerkung.value
+    };
+
+    try {
+        // Speichere lokal
+        const entryId = await saveEntry(entry);
+        console.log('✅ Lokal gespeichert:', entry);
+
+        // Versuche sofort zu synchronisieren wenn online
+        if (navigator.onLine) {
+            const synced = await syncToGoogleSheets(entry);
+            if (synced) {
+                // Markiere sofort als synchronisiert mit der richtigen ID
+                await markAsSynced(entryId);
+                console.log(`✅ Eintrag ${entryId} sofort synchronisiert`);
+            }
+        }
+
+        showNotification('✅ Eintrag gespeichert!', 'success');
+        form.reset();
+        
+        // Setze Datum auf heute
+        form.datum.value = new Date().toISOString().split('T')[0];
+        
+        await updatePendingCount();
+
+    } catch (error) {
+        console.error('Fehler beim Speichern:', error);
+        showNotification('❌ Fehler beim Speichern', 'error');
+    }
+}
+
+function resetForm() {
+    const form = document.getElementById('fahrtenbuchForm');
+    form.reset();
+    form.datum.value = new Date().toISOString().split('T')[0];
+}
+
+// ========================================
+// PWA INSTALLATION
+// ========================================
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    const installBtn = document.getElementById('installBtn');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+    }
+});
+
+async function installApp() {
+    if (!deferredPrompt) {
+        showNotification('⚠️ Installation nicht verfügbar', 'error');
+        return;
+    }
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+        showNotification('✅ App installiert!', 'success');
+    }
+    
+    deferredPrompt = null;
+    document.getElementById('installBtn').style.display = 'none';
+}
+
+// ========================================
+// SERVICE WORKER REGISTRATION
+// ========================================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/fahrtenbuch/sw.js')
+        .then(reg => console.log('Service Worker registriert', reg))
+        .catch(err => console.log('Service Worker Fehler', err));
+}
+
+// ========================================
+// EVENT LISTENERS
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Formular
+    const form = document.getElementById('fahrtenbuchForm');
+    if (form) {
+        form.addEventListener('submit', handleSubmit);
+        // Setze heutiges Datum als Standard
+        form.datum.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Reset Button
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetForm);
+    }
+
+    // Install Button
+    const installBtn = document.getElementById('installBtn');
+    if (installBtn) {
+        installBtn.addEventListener('click', installApp);
+    }
+
+    // Online/Offline Status
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Initiale Updates
+    updateOnlineStatus();
+    updatePendingCount();
+});
+
+// Auto-Sync alle 30 Sekunden wenn online
+setInterval(() => {
+    if (navigator.onLine) {
+        syncAll();
+    }
+}, 30000);
