@@ -1,131 +1,157 @@
-/**
- * Fahrtenbuch PWA - Hauptlogik
- * Offline-fähig mit automatischer Synchronisation
- */
+// 🚗 Fahrtenbuch PWA - App Logic
+// Offline-fähiges Fahrtenbuch mit Google Sheets Sync
 
-// Konfiguration - HIER DEINE GOOGLE APPS SCRIPT URL EINTRAGEN!
+// ========================================
+// KONFIGURATION
+// ========================================
 const CONFIG = {
-    SYNC_URL: 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER', // ← Hier deine URL einfügen!
-    SYNC_INTERVAL: 30000, // Synchronisiert alle 30 Sekunden
+    APP_NAME: 'Fahrtenbuch',
+    VERSION: '2.0',
+    SYNC_URL: 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER', // ⚠️ HIER DEINE GOOGLE APPS SCRIPT URL EINTRAGEN!
     DB_NAME: 'FahrtenbuchDB',
-    DB_VERSION: 1,
+    DB_VERSION: 2, // Version erhöht wegen Schema-Änderung
     STORE_NAME: 'entries'
 };
 
-// IndexedDB initialisieren
-let db;
-
-function initDB() {
+// ========================================
+// INDEXEDDB SETUP
+// ========================================
+function openDatabase() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
 
         request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-            db = request.result;
-            resolve(db);
-        };
+        request.onsuccess = () => resolve(request.result);
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
-                const objectStore = db.createObjectStore(CONFIG.STORE_NAME, { 
-                    keyPath: 'id', 
-                    autoIncrement: true 
-                });
-                objectStore.createIndex('synced', 'synced', { unique: false });
-                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+            
+            // Lösche alten Store falls vorhanden
+            if (db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                db.deleteObjectStore(CONFIG.STORE_NAME);
             }
+
+            // Erstelle neuen Store
+            const store = db.createObjectStore(CONFIG.STORE_NAME, { 
+                keyPath: 'id', 
+                autoIncrement: true 
+            });
+            
+            // Erstelle Indices
+            store.createIndex('synced', 'synced', { unique: false });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            
+            console.log('Datenbank erstellt/aktualisiert');
         };
     });
 }
 
-// Eintrag in IndexedDB speichern
-function saveToIndexedDB(entry) {
+// ========================================
+// DATENBANK OPERATIONEN
+// ========================================
+async function saveEntry(entry) {
+    const db = await openDatabase();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
         const store = transaction.objectStore(CONFIG.STORE_NAME);
-        const request = store.add(entry);
+        
+        const request = store.add({
+            ...entry,
+            synced: false,
+            timestamp: new Date().toISOString()
+        });
 
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-// Alle unsynced Einträge abrufen
-function getUnsyncedEntries() {
+async function getUnsyncedEntries() {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            // Filtere nur ungesyncte Einträge
+            const allEntries = request.result || [];
+            const unsynced = allEntries.filter(entry => !entry.synced);
+            resolve(unsynced);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function markAsSynced(id) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        
+        const getRequest = store.get(id);
+        
+        getRequest.onsuccess = () => {
+            const entry = getRequest.result;
+            if (entry) {
+                entry.synced = true;
+                const updateRequest = store.put(entry);
+                updateRequest.onsuccess = () => resolve();
+                updateRequest.onerror = () => reject(updateRequest.error);
+            } else {
+                resolve();
+            }
+        };
+        
+        getRequest.onerror = () => reject(getRequest.error);
+    });
+}
+
+async function getAllEntries() {
+    const db = await openDatabase();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
         const store = transaction.objectStore(CONFIG.STORE_NAME);
         const request = store.getAll();
 
-        request.onsuccess = () => {
-            // Filtere nur die nicht synchronisierten Einträge
-            const unsyncedEntries = request.result.filter(entry => !entry.synced);
-            resolve(unsyncedEntries);
-        };
+        request.onsuccess = () => resolve(request.result || []);
         request.onerror = () => reject(request.error);
     });
 }
 
-// Eintrag als synchronisiert markieren
-function markAsSynced(id) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(CONFIG.STORE_NAME);
-        const request = store.get(id);
+// ========================================
+// GOOGLE SHEETS SYNCHRONISATION
+// ========================================
+async function syncToGoogleSheets(entry) {
+    if (CONFIG.SYNC_URL === 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER') {
+        console.warn('⚠️ Google Apps Script URL nicht konfiguriert!');
+        return false;
+    }
 
-        request.onsuccess = () => {
-            const entry = request.result;
-            entry.synced = true;
-            const updateRequest = store.put(entry);
-            updateRequest.onsuccess = () => resolve();
-            updateRequest.onerror = () => reject(updateRequest.error);
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
-
-// Eintrag zu Google Sheets senden
-async function syncEntry(entry) {
     try {
         const response = await fetch(CONFIG.SYNC_URL, {
             method: 'POST',
+            mode: 'no-cors', // Wichtig für Google Apps Script!
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                datum: entry.datum,
-                kmStand: entry.kmStand,
-                kmTrip: entry.kmTrip,
-                spritLiter: entry.spritLiter,
-                kosten: entry.kosten,
-                preisJeLiter: entry.preisJeLiter,
-                tankstelle: entry.tankstelle,
-                bemerkung: entry.bemerkung
-            })
+            body: JSON.stringify(entry)
         });
 
-        if (!response.ok) {
-            throw new Error('Netzwerkfehler');
-        }
-
-        const result = await response.json();
+        // no-cors gibt immer status 0, das ist normal
+        console.log('✅ An Google Sheets gesendet:', entry);
+        return true;
         
-        if (result.success) {
-            await markAsSynced(entry.id);
-            return true;
-        } else {
-            throw new Error(result.error || 'Unbekannter Fehler');
-        }
     } catch (error) {
-        console.error('Sync-Fehler:', error);
+        console.error('❌ Google Sheets Sync Fehler:', error);
         return false;
     }
 }
 
-// Alle unsynced Einträge synchronisieren
 async function syncAll() {
     if (!navigator.onLine) {
+        console.log('⚠️ Offline - Sync übersprungen');
         return;
     }
 
@@ -133,177 +159,221 @@ async function syncAll() {
         const entries = await getUnsyncedEntries();
         
         if (entries.length === 0) {
-            updateSyncInfo('Alle Daten synchronisiert');
+            console.log('✅ Keine Einträge zum Synchronisieren');
             return;
         }
 
-        updateSyncInfo(`Synchronisiere ${entries.length} Eintrag/Einträge...`);
+        console.log(`🔄 Synchronisiere ${entries.length} Einträge...`);
 
         for (const entry of entries) {
-            await syncEntry(entry);
+            const success = await syncToGoogleSheets(entry);
+            if (success) {
+                await markAsSynced(entry.id);
+                console.log(`✅ Eintrag ${entry.id} synchronisiert`);
+            }
         }
 
-        updateSyncInfo('Alle Daten synchronisiert');
-        updatePendingCount();
+        await updatePendingCount();
+        showNotification('✅ Synchronisation erfolgreich!', 'success');
+        
     } catch (error) {
         console.error('Synchronisierungsfehler:', error);
+        showNotification('⚠️ Synchronisierungsfehler', 'error');
     }
 }
 
-// UI-Updates
-function updateOnlineStatus() {
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
+// ========================================
+// UI FUNKTIONEN
+// ========================================
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+    `;
 
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function updateOnlineStatus() {
+    const indicator = document.getElementById('onlineStatus');
+    const statusText = document.getElementById('statusText');
+    
     if (navigator.onLine) {
-        statusDot.classList.remove('offline');
+        indicator.className = 'online-indicator online';
         statusText.textContent = 'Online';
-        syncAll(); // Automatisch synchronisieren wenn online
+        syncAll();
     } else {
-        statusDot.classList.add('offline');
+        indicator.className = 'online-indicator offline';
         statusText.textContent = 'Offline';
     }
 }
 
-function updateSyncInfo(message) {
-    const syncInfo = document.getElementById('syncInfo');
-    syncInfo.textContent = message;
-}
-
 async function updatePendingCount() {
-    const entries = await getUnsyncedEntries();
-    if (entries.length > 0) {
-        updateSyncInfo(`${entries.length} Eintrag/Einträge warten auf Synchronisation`);
-    } else {
-        updateSyncInfo('Alle Daten synchronisiert');
+    try {
+        const entries = await getUnsyncedEntries();
+        const count = entries.length;
+        const badge = document.getElementById('pendingBadge');
+        
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der Pending-Anzahl:', error);
     }
 }
 
-function showMessage(type, message) {
-    const successMsg = document.getElementById('successMessage');
-    const errorMsg = document.getElementById('errorMessage');
-    const loading = document.getElementById('loading');
-
-    loading.style.display = 'none';
-
-    if (type === 'success') {
-        successMsg.textContent = message;
-        successMsg.style.display = 'block';
-        setTimeout(() => {
-            successMsg.style.display = 'none';
-        }, 3000);
-    } else if (type === 'error') {
-        errorMsg.textContent = message;
-        errorMsg.style.display = 'block';
-        setTimeout(() => {
-            errorMsg.style.display = 'none';
-        }, 3000);
-    }
-}
-
-function showLoading() {
-    document.getElementById('loading').style.display = 'block';
-}
-
-// Formular-Handler
+// ========================================
+// FORMULAR HANDLING
+// ========================================
 async function handleSubmit(event) {
     event.preventDefault();
-    showLoading();
 
+    const form = event.target;
     const entry = {
-        datum: document.getElementById('datum').value,
-        kmStand: document.getElementById('kmStand').value,
-        kmTrip: document.getElementById('kmTrip').value,
-        spritLiter: document.getElementById('spritLiter').value,
-        kosten: document.getElementById('kosten').value || '',
-        preisJeLiter: document.getElementById('preisJeLiter').value || '',
-        tankstelle: document.getElementById('tankstelle').value || '',
-        bemerkung: document.getElementById('bemerkung').value,
-        timestamp: new Date().toISOString(),
-        synced: false
+        datum: form.datum.value,
+        kmStand: form.kmStand.value,
+        kmTrip: form.kmTrip.value,
+        spritLiter: form.spritLiter.value,
+        kosten: form.kosten.value,
+        preisJeLiter: form.preisJeLiter.value,
+        tankstelle: form.tankstelle.value,
+        bemerkung: form.bemerkung.value
     };
 
     try {
-        // Lokal speichern
-        await saveToIndexedDB(entry);
-        
-        // Formular zurücksetzen
-        document.getElementById('fahrtenbuchForm').reset();
-        
-        // Datum auf heute setzen
-        document.getElementById('datum').valueAsDate = new Date();
-        
-        showMessage('success', '✓ Eintrag gespeichert!');
-        
-        // Versuchen zu synchronisieren wenn online
+        // Speichere lokal
+        await saveEntry(entry);
+        console.log('✅ Lokal gespeichert:', entry);
+
+        // Versuche sofort zu synchronisieren wenn online
         if (navigator.onLine) {
-            await syncAll();
-        } else {
-            updatePendingCount();
+            const synced = await syncToGoogleSheets(entry);
+            if (synced) {
+                // Markiere als synchronisiert
+                const entries = await getUnsyncedEntries();
+                const lastEntry = entries[entries.length - 1];
+                if (lastEntry) {
+                    await markAsSynced(lastEntry.id);
+                }
+            }
         }
+
+        showNotification('✅ Eintrag gespeichert!', 'success');
+        form.reset();
+        
+        // Setze Datum auf heute
+        form.datum.value = new Date().toISOString().split('T')[0];
+        
+        await updatePendingCount();
+
     } catch (error) {
         console.error('Fehler beim Speichern:', error);
-        showMessage('error', '✗ Fehler beim Speichern');
+        showNotification('❌ Fehler beim Speichern', 'error');
     }
 }
 
-// PWA Installation
+function resetForm() {
+    const form = document.getElementById('fahrtenbuchForm');
+    form.reset();
+    form.datum.value = new Date().toISOString().split('T')[0];
+}
+
+// ========================================
+// PWA INSTALLATION
+// ========================================
 let deferredPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    document.getElementById('installPrompt').style.display = 'block';
+    
+    const installBtn = document.getElementById('installBtn');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+    }
 });
 
-document.getElementById('installButton')?.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
+async function installApp() {
+    if (!deferredPrompt) {
+        showNotification('⚠️ Installation nicht verfügbar', 'error');
+        return;
+    }
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
-        document.getElementById('installPrompt').style.display = 'none';
+        showNotification('✅ App installiert!', 'success');
     }
     
     deferredPrompt = null;
-});
+    document.getElementById('installBtn').style.display = 'none';
+}
 
-// Event Listeners
-document.addEventListener('DOMContentLoaded', async () => {
-    // Service Worker registrieren
-    if ('serviceWorker' in navigator) {
-        try {
-            await navigator.serviceWorker.register('sw.js');
-            console.log('Service Worker registriert');
-        } catch (error) {
-            console.error('Service Worker Registrierung fehlgeschlagen:', error);
-        }
+// ========================================
+// SERVICE WORKER REGISTRATION
+// ========================================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/fahrtenbuch/sw.js')
+        .then(reg => console.log('Service Worker registriert', reg))
+        .catch(err => console.log('Service Worker Fehler', err));
+}
+
+// ========================================
+// EVENT LISTENERS
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Formular
+    const form = document.getElementById('fahrtenbuchForm');
+    if (form) {
+        form.addEventListener('submit', handleSubmit);
+        // Setze heutiges Datum als Standard
+        form.datum.value = new Date().toISOString().split('T')[0];
     }
 
-    // IndexedDB initialisieren
-    await initDB();
-
-    // Formular
-    document.getElementById('fahrtenbuchForm').addEventListener('submit', handleSubmit);
-    
     // Reset Button
-    document.getElementById('resetButton').addEventListener('click', () => {
-        document.getElementById('fahrtenbuchForm').reset();
-        document.getElementById('datum').valueAsDate = new Date();
-    });
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetForm);
+    }
 
-    // Datum auf heute setzen
-    document.getElementById('datum').valueAsDate = new Date();
+    // Install Button
+    const installBtn = document.getElementById('installBtn');
+    if (installBtn) {
+        installBtn.addEventListener('click', installApp);
+    }
 
     // Online/Offline Status
     window.addEventListener('online', updateOnlineStatus);
     window.addEventListener('offline', updateOnlineStatus);
+    
+    // Initiale Updates
     updateOnlineStatus();
-
-    // Pending count anzeigen
     updatePendingCount();
-
-    // Periodische Synchronisation
-    setInterval(syncAll, CONFIG.SYNC_INTERVAL);
 });
+
+// Auto-Sync alle 30 Sekunden wenn online
+setInterval(() => {
+    if (navigator.onLine) {
+        syncAll();
+    }
+}, 30000);
