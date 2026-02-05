@@ -1,12 +1,14 @@
 // Service Worker für Fahrtenbuch PWA
-const CACHE_NAME = 'fahrtenbuch-v2';
+const CACHE_NAME = 'fahrtenbuch-v3';
 
 // Nur essentielle Dateien cachen
 const urlsToCache = [
     '/fahrtenbuch/',
     '/fahrtenbuch/index.html',
     '/fahrtenbuch/app.js',
-    '/fahrtenbuch/manifest.json'
+    '/fahrtenbuch/manifest.json',
+    '/fahrtenbuch/icon-192.png',
+    '/fahrtenbuch/icon-512.png'
 ];
 
 // Installation
