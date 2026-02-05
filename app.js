@@ -56,10 +56,13 @@ function getUnsyncedEntries() {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
         const store = transaction.objectStore(CONFIG.STORE_NAME);
-        const index = store.index('synced');
-        const request = index.getAll(false);
+        const request = store.getAll();
 
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            // Filtere nur die nicht synchronisierten Einträge
+            const unsyncedEntries = request.result.filter(entry => !entry.synced);
+            resolve(unsyncedEntries);
+        };
         request.onerror = () => reject(request.error);
     });
 }
