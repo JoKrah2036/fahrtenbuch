@@ -1,32 +1,37 @@
+/**
+ * Fahrtenbuch PWA - Hauptlogik
+ * Offline-fähig mit automatischer Synchronisation
+ */
+
 // Konfiguration - HIER DEINE GOOGLE APPS SCRIPT URL EINTRAGEN!
 const CONFIG = {
-    // Ersetze dies mit deiner Google Apps Script Web-App URL
-    // Anleitung siehe README.md
-    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwN29HLdYc4XS9so7AsiyfoAFCs1BzscvdDSildHdb8RQ6GXrkwgYZLBbWnw-Cmn8Jd/exec'
+    SYNC_URL: 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER', // ← Hier deine URL einfügen!
+    SYNC_INTERVAL: 30000, // Synchronisiert alle 30 Sekunden
+    DB_NAME: 'FahrtenbuchDB',
+    DB_VERSION: 1,
+    STORE_NAME: 'entries'
 };
 
-// Datenbank initialisieren
-const DB_NAME = 'FahrtenbuchDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'entries';
-
+// IndexedDB initialisieren
 let db;
 
-// IndexedDB initialisieren
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
+        const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
             db = request.result;
             resolve(db);
         };
-        
+
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            if (!db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
+                const objectStore = db.createObjectStore(CONFIG.STORE_NAME, { 
+                    keyPath: 'id', 
+                    autoIncrement: true 
+                });
                 objectStore.createIndex('synced', 'synced', { unique: false });
                 objectStore.createIndex('timestamp', 'timestamp', { unique: false });
             }
@@ -34,49 +39,41 @@ function initDB() {
     });
 }
 
-// Eintrag speichern
-async function saveEntry(entry) {
+// Eintrag in IndexedDB speichern
+function saveToIndexedDB(entry) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        
-        const entryWithMeta = {
-            ...entry,
-            timestamp: new Date().toISOString(),
-            synced: false
-        };
-        
-        const request = store.add(entryWithMeta);
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
+        const request = store.add(entry);
+
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-// Nicht synchronisierte Einträge abrufen
-async function getPendingEntries() {
+// Alle unsynced Einträge abrufen
+function getUnsyncedEntries() {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
         const index = store.index('synced');
         const request = index.getAll(false);
-        
+
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
 // Eintrag als synchronisiert markieren
-async function markAsSynced(id) {
+function markAsSynced(id) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
+        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(CONFIG.STORE_NAME);
         const request = store.get(id);
-        
+
         request.onsuccess = () => {
             const entry = request.result;
             entry.synced = true;
-            entry.syncedAt = new Date().toISOString();
-            
             const updateRequest = store.put(entry);
             updateRequest.onsuccess = () => resolve();
             updateRequest.onerror = () => reject(updateRequest.error);
@@ -85,146 +82,167 @@ async function markAsSynced(id) {
     });
 }
 
-// Mit Google Sheets synchronisieren
-async function syncWithGoogleSheets() {
-    if (!navigator.onLine) {
-        console.log('Offline - Synchronisation übersprungen');
-        return;
-    }
+// Eintrag zu Google Sheets senden
+async function syncEntry(entry) {
+    try {
+        const response = await fetch(CONFIG.SYNC_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                datum: entry.datum,
+                kmStand: entry.kmStand,
+                kmTrip: entry.kmTrip,
+                spritLiter: entry.spritLiter,
+                kosten: entry.kosten,
+                preisJeLiter: entry.preisJeLiter,
+                tankstelle: entry.tankstelle,
+                bemerkung: entry.bemerkung
+            })
+        });
 
-    if (CONFIG.SYNC_URL === 'https://script.google.com/macros/s/AKfycbwN29HLdYc4XS9so7AsiyfoAFCs1BzscvdDSildHdb8RQ6GXrkwgYZLBbWnw-Cmn8Jd/exec') {
-        console.log('Synchronisation übersprungen - URL noch nicht konfiguriert');
-        return;
-    }
-
-    const pendingEntries = await getPendingEntries();
-    
-    if (pendingEntries.length === 0) {
-        return;
-    }
-
-    console.log(`Synchronisiere ${pendingEntries.length} Einträge...`);
-
-    for (const entry of pendingEntries) {
-        try {
-            const response = await fetch(CONFIG.SYNC_URL, {
-                method: 'POST',
-                mode: 'no-cors', // Wichtig für Google Apps Script
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    datum: entry.datum,
-                    km: entry.km,
-                    liter: entry.liter || '',
-                    kosten: entry.kosten || '',
-                    zweck: entry.zweck,
-                    timestamp: entry.timestamp
-                })
-            });
-
-            // no-cors gibt keine echte Response zurück, also gehen wir davon aus, dass es funktioniert hat
-            await markAsSynced(entry.id);
-            console.log(`Eintrag ${entry.id} synchronisiert`);
-            
-        } catch (error) {
-            console.error(`Fehler beim Synchronisieren von Eintrag ${entry.id}:`, error);
-            // Bei Fehler stoppen wir, um nicht alle Anfragen zu versuchen
-            break;
+        if (!response.ok) {
+            throw new Error('Netzwerkfehler');
         }
-    }
 
-    updatePendingCount();
-    
-    const remaining = await getPendingEntries();
-    if (remaining.length === 0) {
-        showNotification('Alle Einträge erfolgreich synchronisiert! ✓', 'success');
+        const result = await response.json();
+        
+        if (result.success) {
+            await markAsSynced(entry.id);
+            return true;
+        } else {
+            throw new Error(result.error || 'Unbekannter Fehler');
+        }
+    } catch (error) {
+        console.error('Sync-Fehler:', error);
+        return false;
     }
 }
 
-// Online/Offline Status überwachen
+// Alle unsynced Einträge synchronisieren
+async function syncAll() {
+    if (!navigator.onLine) {
+        return;
+    }
+
+    try {
+        const entries = await getUnsyncedEntries();
+        
+        if (entries.length === 0) {
+            updateSyncInfo('Alle Daten synchronisiert');
+            return;
+        }
+
+        updateSyncInfo(`Synchronisiere ${entries.length} Eintrag/Einträge...`);
+
+        for (const entry of entries) {
+            await syncEntry(entry);
+        }
+
+        updateSyncInfo('Alle Daten synchronisiert');
+        updatePendingCount();
+    } catch (error) {
+        console.error('Synchronisierungsfehler:', error);
+    }
+}
+
+// UI-Updates
 function updateOnlineStatus() {
-    const indicator = document.getElementById('statusIndicator');
-    const text = document.getElementById('statusText');
-    
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
     if (navigator.onLine) {
-        indicator.classList.remove('offline');
-        text.textContent = 'Online';
-        syncWithGoogleSheets(); // Automatisch synchronisieren, wenn online
+        statusDot.classList.remove('offline');
+        statusText.textContent = 'Online';
+        syncAll(); // Automatisch synchronisieren wenn online
     } else {
-        indicator.classList.add('offline');
-        text.textContent = 'Offline';
+        statusDot.classList.add('offline');
+        statusText.textContent = 'Offline';
     }
 }
 
-// Anzahl wartender Einträge aktualisieren
+function updateSyncInfo(message) {
+    const syncInfo = document.getElementById('syncInfo');
+    syncInfo.textContent = message;
+}
+
 async function updatePendingCount() {
-    const pendingEntries = await getPendingEntries();
-    const countElement = document.getElementById('pendingCount');
-    const textElement = document.getElementById('pendingText');
-    
-    countElement.textContent = pendingEntries.length;
-    
-    if (pendingEntries.length === 1) {
-        textElement.textContent = 'Eintrag wartet auf Synchronisation';
+    const entries = await getUnsyncedEntries();
+    if (entries.length > 0) {
+        updateSyncInfo(`${entries.length} Eintrag/Einträge warten auf Synchronisation`);
     } else {
-        textElement.textContent = 'Einträge warten auf Synchronisation';
+        updateSyncInfo('Alle Daten synchronisiert');
     }
 }
 
-// Benachrichtigung anzeigen
-function showNotification(message, type = 'info') {
-    const notification = document.getElementById('notification');
-    notification.textContent = message;
-    notification.className = `notification ${type}`;
-    notification.classList.add('show');
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 3000);
+function showMessage(type, message) {
+    const successMsg = document.getElementById('successMessage');
+    const errorMsg = document.getElementById('errorMessage');
+    const loading = document.getElementById('loading');
+
+    loading.style.display = 'none';
+
+    if (type === 'success') {
+        successMsg.textContent = message;
+        successMsg.style.display = 'block';
+        setTimeout(() => {
+            successMsg.style.display = 'none';
+        }, 3000);
+    } else if (type === 'error') {
+        errorMsg.textContent = message;
+        errorMsg.style.display = 'block';
+        setTimeout(() => {
+            errorMsg.style.display = 'none';
+        }, 3000);
+    }
+}
+
+function showLoading() {
+    document.getElementById('loading').style.display = 'block';
 }
 
 // Formular-Handler
-document.getElementById('fahrtenbuchForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
+async function handleSubmit(event) {
+    event.preventDefault();
+    showLoading();
+
     const entry = {
-        datum: formData.get('datum'),
-        km: parseFloat(formData.get('km')),
-        liter: formData.get('liter') ? parseFloat(formData.get('liter')) : null,
-        kosten: formData.get('kosten') ? parseFloat(formData.get('kosten')) : null,
-        zweck: formData.get('zweck')
+        datum: document.getElementById('datum').value,
+        kmStand: document.getElementById('kmStand').value,
+        kmTrip: document.getElementById('kmTrip').value,
+        spritLiter: document.getElementById('spritLiter').value,
+        kosten: document.getElementById('kosten').value || '',
+        preisJeLiter: document.getElementById('preisJeLiter').value || '',
+        tankstelle: document.getElementById('tankstelle').value || '',
+        bemerkung: document.getElementById('bemerkung').value,
+        timestamp: new Date().toISOString(),
+        synced: false
     };
-    
+
     try {
-        await saveEntry(entry);
-        showNotification('Eintrag gespeichert! 📝', 'success');
-        e.target.reset();
+        // Lokal speichern
+        await saveToIndexedDB(entry);
+        
+        // Formular zurücksetzen
+        document.getElementById('fahrtenbuchForm').reset();
         
         // Datum auf heute setzen
         document.getElementById('datum').valueAsDate = new Date();
         
-        await updatePendingCount();
+        showMessage('success', '✓ Eintrag gespeichert!');
         
-        // Versuche direkt zu synchronisieren, wenn online
+        // Versuchen zu synchronisieren wenn online
         if (navigator.onLine) {
-            setTimeout(() => syncWithGoogleSheets(), 500);
+            await syncAll();
         } else {
-            showNotification('Wird synchronisiert, sobald du online bist', 'info');
+            updatePendingCount();
         }
-        
     } catch (error) {
         console.error('Fehler beim Speichern:', error);
-        showNotification('Fehler beim Speichern! ❌', 'error');
+        showMessage('error', '✗ Fehler beim Speichern');
     }
-});
-
-// Reset Button
-document.getElementById('resetBtn').addEventListener('click', () => {
-    document.getElementById('fahrtenbuchForm').reset();
-    document.getElementById('datum').valueAsDate = new Date();
-});
+}
 
 // PWA Installation
 let deferredPrompt;
@@ -235,47 +253,54 @@ window.addEventListener('beforeinstallprompt', (e) => {
     document.getElementById('installPrompt').style.display = 'block';
 });
 
-document.getElementById('installButton').addEventListener('click', async () => {
+document.getElementById('installButton')?.addEventListener('click', async () => {
     if (!deferredPrompt) return;
-    
+
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
-        showNotification('App wurde installiert! 🎉', 'success');
+        document.getElementById('installPrompt').style.display = 'none';
     }
     
     deferredPrompt = null;
-    document.getElementById('installPrompt').style.display = 'none';
 });
 
-// Online/Offline Events
-window.addEventListener('online', updateOnlineStatus);
-window.addEventListener('offline', updateOnlineStatus);
-
-// Periodische Synchronisation (alle 30 Sekunden, wenn online)
-setInterval(() => {
-    if (navigator.onLine) {
-        syncWithGoogleSheets();
+// Event Listeners
+document.addEventListener('DOMContentLoaded', async () => {
+    // Service Worker registrieren
+    if ('serviceWorker' in navigator) {
+        try {
+            await navigator.serviceWorker.register('sw.js');
+            console.log('Service Worker registriert');
+        } catch (error) {
+            console.error('Service Worker Registrierung fehlgeschlagen:', error);
+        }
     }
-}, 30000);
 
-// App initialisieren
-async function initApp() {
-    try {
-        await initDB();
-        updateOnlineStatus();
-        await updatePendingCount();
-        
-        // Datum auf heute setzen
+    // IndexedDB initialisieren
+    await initDB();
+
+    // Formular
+    document.getElementById('fahrtenbuchForm').addEventListener('submit', handleSubmit);
+    
+    // Reset Button
+    document.getElementById('resetButton').addEventListener('click', () => {
+        document.getElementById('fahrtenbuchForm').reset();
         document.getElementById('datum').valueAsDate = new Date();
-        
-        console.log('Fahrtenbuch-App initialisiert');
-    } catch (error) {
-        console.error('Fehler beim Initialisieren:', error);
-        showNotification('Fehler beim Starten der App', 'error');
-    }
-}
+    });
 
-// App starten
-initApp();
+    // Datum auf heute setzen
+    document.getElementById('datum').valueAsDate = new Date();
+
+    // Online/Offline Status
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+
+    // Pending count anzeigen
+    updatePendingCount();
+
+    // Periodische Synchronisation
+    setInterval(syncAll, CONFIG.SYNC_INTERVAL);
+});
