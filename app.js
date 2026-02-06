@@ -278,6 +278,7 @@ async function handleSubmit(event) {
     const form = event.target;
     const entry = {
         datum: form.datum.value,
+        tag: form.tag.value,
         kmStand: parseGermanNumber(form.kmStand.value),
         kmTrip: parseGermanNumber(form.kmTrip.value),
         spritLiter: parseGermanNumber(form.spritLiter.value),
@@ -305,8 +306,9 @@ async function handleSubmit(event) {
         showNotification('✅ Eintrag gespeichert!', 'success');
         form.reset();
         
-        // Setze Datum auf heute
+        // Setze Datum auf heute und Tag auf "Tanken"
         form.datum.value = new Date().toISOString().split('T')[0];
+        form.tag.value = 'Tanken';
         
         await updatePendingCount();
 
@@ -320,6 +322,7 @@ function resetForm() {
     const form = document.getElementById('fahrtenbuchForm');
     form.reset();
     form.datum.value = new Date().toISOString().split('T')[0];
+    form.tag.value = 'Tanken';
 }
 
 // ========================================
@@ -371,8 +374,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('fahrtenbuchForm');
     if (form) {
         form.addEventListener('submit', handleSubmit);
-        // Setze heutiges Datum als Standard
+        // Setze heutiges Datum und Tag als Standard
         form.datum.value = new Date().toISOString().split('T')[0];
+        form.tag.value = 'Tanken';
     }
 
     // Reset Button
