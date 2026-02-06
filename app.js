@@ -1,4 +1,4 @@
-// 🚗 Fahrtenbuch PWA - App Logic
+// 🚗 Fahrtenbuch PWA - App Logic v2.2 (FIXED)
 // Offline-fähiges Fahrtenbuch mit Google Sheets Sync
 
 // ========================================
@@ -6,10 +6,10 @@
 // ========================================
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.0',
+    VERSION: '2.2',
     SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
     DB_NAME: 'FahrtenbuchDB',
-    DB_VERSION: 2, // Version erhöht wegen Schema-Änderung
+    DB_VERSION: 2,
     STORE_NAME: 'entries'
 };
 
@@ -19,10 +19,14 @@ const CONFIG = {
 
 /**
  * Konvertiert deutsche Zahleneingabe zu standardisiertem Format
+ * WICHTIG: Entfernt ALLE Punkte (da sie Tausendertrennzeichen sind)
+ * und wandelt Kommas in Dezimalpunkte um
+ * 
  * Beispiele:
- * "233.300" -> "233300" (Tausenderpunkt entfernen)
+ * "233.300" -> "233300" (Tausenderpunkte entfernen)
  * "40,50" -> "40.50" (Komma zu Punkt)
  * "1,499" -> "1.499" (Komma zu Punkt)
+ * "35000" -> "35000" (bleibt unverändert)
  */
 function parseGermanNumber(value) {
     if (!value || value === '') return '';
@@ -30,7 +34,10 @@ function parseGermanNumber(value) {
     // Konvertiere zu String falls nötig
     let str = value.toString().trim();
     
-    // Entferne alle Punkte (Tausendertrennzeichen)
+    // Wenn leer nach trim
+    if (str === '') return '';
+    
+    // WICHTIG: Entferne ALLE Punkte (Tausendertrennzeichen)
     str = str.replace(/\./g, '');
     
     // Ersetze Komma durch Punkt (Dezimaltrennzeichen)
@@ -52,18 +59,15 @@ function openDatabase() {
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
             
-            // Lösche alten Store falls vorhanden
             if (db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
                 db.deleteObjectStore(CONFIG.STORE_NAME);
             }
 
-            // Erstelle neuen Store
             const store = db.createObjectStore(CONFIG.STORE_NAME, { 
                 keyPath: 'id', 
                 autoIncrement: true 
             });
             
-            // Erstelle Indices
             store.createIndex('synced', 'synced', { unique: false });
             store.createIndex('timestamp', 'timestamp', { unique: false });
             
@@ -101,7 +105,6 @@ async function getUnsyncedEntries() {
         const request = store.getAll();
 
         request.onsuccess = () => {
-            // Filtere nur ungesyncte Einträge
             const allEntries = request.result || [];
             const unsynced = allEntries.filter(entry => !entry.synced);
             resolve(unsynced);
@@ -158,14 +161,13 @@ async function syncToGoogleSheets(entry) {
     try {
         const response = await fetch(CONFIG.SYNC_URL, {
             method: 'POST',
-            mode: 'no-cors', // Wichtig für Google Apps Script!
+            mode: 'no-cors',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(entry)
         });
 
-        // no-cors gibt immer status 0, das ist normal
         console.log('✅ An Google Sheets gesendet:', entry);
         return true;
         
@@ -276,6 +278,8 @@ async function handleSubmit(event) {
     event.preventDefault();
 
     const form = event.target;
+    
+    // Erstelle Entry-Objekt mit bereinigten Zahlen
     const entry = {
         datum: form.datum.value,
         tag: form.tag.value,
@@ -288,6 +292,11 @@ async function handleSubmit(event) {
         bemerkung: form.bemerkung.value
     };
 
+    console.log('=== FORMULAR DATEN ===');
+    console.log('Original kmStand:', form.kmStand.value);
+    console.log('Bereinigt kmStand:', entry.kmStand);
+    console.log('Vollständiger Eintrag:', entry);
+
     try {
         // Speichere lokal
         const entryId = await saveEntry(entry);
@@ -297,7 +306,6 @@ async function handleSubmit(event) {
         if (navigator.onLine) {
             const synced = await syncToGoogleSheets(entry);
             if (synced) {
-                // Markiere sofort als synchronisiert mit der richtigen ID
                 await markAsSynced(entryId);
                 console.log(`✅ Eintrag ${entryId} sofort synchronisiert`);
             }
