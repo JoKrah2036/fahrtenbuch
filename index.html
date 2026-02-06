@@ -107,7 +107,7 @@
             font-weight: 500;
         }
 
-        input, textarea {
+        input, textarea, select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e5e7eb;
@@ -116,9 +116,14 @@
             transition: border-color 0.3s;
         }
 
-        input:focus, textarea:focus {
+        input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        select {
+            cursor: pointer;
+            background-color: white;
         }
 
         textarea {
@@ -239,6 +244,16 @@
                 <div class="form-group">
                     <label for="datum">Datum</label>
                     <input type="date" id="datum" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tag">Kategorie *</label>
+                    <select id="tag" required>
+                        <option value="Tanken" selected>⛽ Tanken</option>
+                        <option value="Sonderfahrt">🚗 Sonderfahrt</option>
+                        <option value="Werkstatt">🔧 Werkstatt</option>
+                        <option value="Sonstiges">📝 Sonstiges</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
