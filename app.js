@@ -6,7 +6,7 @@
 // ========================================
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.3',
+    VERSION: '2.3-FIXED',
     SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
     DB_NAME: 'FahrtenbuchDB',
     DB_VERSION: 2,
