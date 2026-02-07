@@ -6,7 +6,7 @@
 // ========================================
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.3-FIXED',
+    VERSION: '2.4-FINAL',  // ← NEUE VERSION!
     SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
     DB_NAME: 'FahrtenbuchDB',
     DB_VERSION: 2,
@@ -27,6 +27,9 @@ const CONFIG = {
  * "40,50" -> "40.50" (Komma zu Punkt)
  * "1,499" -> "1.499" (Komma zu Punkt)
  * "35000" -> "35000" (bleibt unverändert)
+ * 
+ * GIBT EINEN STRING ZURÜCK (für das Google Apps Script)
+ * Das Script macht dann parseFloat() draus
  */
 function parseGermanNumber(value) {
     if (!value || value === '') return '';
@@ -43,6 +46,7 @@ function parseGermanNumber(value) {
     // Ersetze Komma durch Punkt (Dezimaltrennzeichen)
     str = str.replace(',', '.');
     
+    // Gib STRING zurück (Google Apps Script macht parseFloat)
     return str;
 }
 
@@ -378,6 +382,14 @@ if ('serviceWorker' in navigator) {
 // EVENT LISTENERS
 // ========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // VERSIONSPRÜFUNG - ZEIGE VERSION IN KONSOLE
+    console.log('╔════════════════════════════════════════╗');
+    console.log('║  FAHRTENBUCH APP GELADEN              ║');
+    console.log('╚════════════════════════════════════════╝');
+    console.log('Version:', CONFIG.VERSION);
+    console.log('Wenn du nicht "2.4-FINAL" siehst, ist der Cache noch aktiv!');
+    console.log('');
+    
     // Formular
     const form = document.getElementById('fahrtenbuchForm');
     if (form) {
