@@ -1,4 +1,4 @@
-// 🚗 Fahrtenbuch PWA - App Logic v2.2 (FIXED)
+// 🚗 Fahrtenbuch PWA - App Logic v2.3 (FIXED FIELD NAMES)
 // Offline-fähiges Fahrtenbuch mit Google Sheets Sync
 
 // ========================================
@@ -6,7 +6,7 @@
 // ========================================
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.2',
+    VERSION: '2.3',
     SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
     DB_NAME: 'FahrtenbuchDB',
     DB_VERSION: 2,
@@ -279,10 +279,10 @@ async function handleSubmit(event) {
 
     const form = event.target;
     
-    // Erstelle Entry-Objekt mit bereinigten Zahlen
+    // FIXED: Verwende "kategorie" statt "tag" um mit Google Apps Script übereinzustimmen
     const entry = {
         datum: form.datum.value,
-        tag: form.tag.value,
+        kategorie: form.tag.value,  // ← GEÄNDERT von "tag" zu "kategorie"
         kmStand: parseGermanNumber(form.kmStand.value),
         kmTrip: parseGermanNumber(form.kmTrip.value),
         spritLiter: parseGermanNumber(form.spritLiter.value),
