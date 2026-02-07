@@ -1,5 +1,5 @@
 // Service Worker für Fahrtenbuch PWA
-const CACHE_NAME = 'fahrtenbuch-v7';  // ← FORCE UPDATE!
+const CACHE_NAME = 'fahrtenbuch-v8';  // ← v8 wegen URL-Fix!
 
 // Nur essentielle Dateien cachen
 const urlsToCache = [

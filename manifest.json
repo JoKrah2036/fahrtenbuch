@@ -1,8 +1,8 @@
 {
-  "name": "Fahrtenbuch v2.3",
-  "short_name": "Fahrtenbuch v2.3",
+  "name": "Fahrtenbuch v2.5",
+  "short_name": "Fahrtenbuch v2.5",
   "description": "Offline-fähiges Fahrtenbuch mit Google Sheets Synchronisation",
-  "start_url": "/fahrtenbuch/?v=20260207",
+  "start_url": "/fahrtenbuch/?v=20260207v2",
   "scope": "/fahrtenbuch/",
   "display": "standalone",
   "background_color": "#667eea",

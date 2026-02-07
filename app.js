@@ -6,8 +6,8 @@
 // ========================================
 const CONFIG = {
     APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.4-FINAL',  // ← NEUE VERSION!
-    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwMy2GqIaSYpkBl3ggHSfKpeAt98cxmlljrx0eFKyLI-lYxIVQkpcmF2IKxd_3arTFx/exec',
+    VERSION: '2.5-FINAL-URL-FIX',  // ← NEUE VERSION mit richtiger URL!
+    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-eD72ziXaRTMxwi7tfFRYOf4sXc0aFqL0YzUz8bbqSxZUUHf30SSCoW1/exec',
     DB_NAME: 'FahrtenbuchDB',
     DB_VERSION: 2,
     STORE_NAME: 'entries'
