@@ -1,22 +1,23 @@
 {
-  "name": "Fahrtenbuch v2.5",
-  "short_name": "Fahrtenbuch v2.5",
-  "description": "Offline-fähiges Fahrtenbuch mit Google Sheets Synchronisation",
-  "start_url": "/fahrtenbuch/?v=20260207v2",
+  "name": "Fahrtenbuch",
+  "short_name": "Fahrtenbuch",
+  "description": "Tankstellen-Einträge erfassen und mit Google Sheets synchronisieren",
+  "version": "2.6",
+  "start_url": "/fahrtenbuch/",
   "scope": "/fahrtenbuch/",
   "display": "standalone",
   "background_color": "#667eea",
-  "theme_color": "#667eea",
+  "theme_color": "#2196F3",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/fahrtenbuch/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "/fahrtenbuch/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
