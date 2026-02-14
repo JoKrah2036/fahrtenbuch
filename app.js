@@ -1,132 +1,69 @@
-// 🚗 Fahrtenbuch PWA - App Logic v2.3 (FIXED FIELD NAMES)
-// Offline-fähiges Fahrtenbuch mit Google Sheets Sync
+// Fahrtenbuch App - Version mit Anti-Doppelklick-Schutz
 
-// ========================================
-// KONFIGURATION
-// ========================================
-const CONFIG = {
-    APP_NAME: 'Fahrtenbuch',
-    VERSION: '2.5-FINAL-URL-FIX',  // ← NEUE VERSION mit richtiger URL!
-    SYNC_URL: 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-eD72ziXaRTMxwi7tfFRYOf4sXc0aFqL0YzUz8bbqSxZUUHf30SSCoW1/exec',
-    DB_NAME: 'FahrtenbuchDB',
-    DB_VERSION: 2,
-    STORE_NAME: 'entries'
-};
+const DB_NAME = 'FahrtenbuchDB';
+const DB_VERSION = 2;
+const STORE_NAME = 'entries';
+const GOOGLE_SCRIPT_URL = 'DEINE_GOOGLE_SCRIPT_URL_HIER'; // TODO: Ersetzen mit deiner URL
 
-// ========================================
-// HILFSFUNKTIONEN
-// ========================================
+let db;
+let isSubmitting = false; // Debouncing-Flag
 
-/**
- * Konvertiert deutsche Zahleneingabe zu standardisiertem Format
- * WICHTIG: Entfernt ALLE Punkte (da sie Tausendertrennzeichen sind)
- * und wandelt Kommas in Dezimalpunkte um
- * 
- * Beispiele:
- * "233.300" -> "233300" (Tausenderpunkte entfernen)
- * "40,50" -> "40.50" (Komma zu Punkt)
- * "1,499" -> "1.499" (Komma zu Punkt)
- * "35000" -> "35000" (bleibt unverändert)
- * 
- * GIBT EINEN STRING ZURÜCK (für das Google Apps Script)
- * Das Script macht dann parseFloat() draus
- */
-function parseGermanNumber(value) {
-    if (!value || value === '') return '';
-    
-    // Konvertiere zu String falls nötig
-    let str = value.toString().trim();
-    
-    // Wenn leer nach trim
-    if (str === '') return '';
-    
-    // WICHTIG: Entferne ALLE Punkte (Tausendertrennzeichen)
-    str = str.replace(/\./g, '');
-    
-    // Ersetze Komma durch Punkt (Dezimaltrennzeichen)
-    str = str.replace(',', '.');
-    
-    // Gib STRING zurück (Google Apps Script macht parseFloat)
-    return str;
-}
-
-// ========================================
-// INDEXEDDB SETUP
-// ========================================
-function openDatabase() {
+// IndexedDB initialisieren
+async function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            db = request.result;
+            resolve(db);
+        };
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
             
-            if (db.objectStoreNames.contains(CONFIG.STORE_NAME)) {
-                db.deleteObjectStore(CONFIG.STORE_NAME);
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const objectStore = db.createObjectStore(STORE_NAME, { 
+                    keyPath: 'id', 
+                    autoIncrement: true 
+                });
+                objectStore.createIndex('synced', 'synced', { unique: false });
+                objectStore.createIndex('datum', 'datum', { unique: false });
             }
-
-            const store = db.createObjectStore(CONFIG.STORE_NAME, { 
-                keyPath: 'id', 
-                autoIncrement: true 
-            });
-            
-            store.createIndex('synced', 'synced', { unique: false });
-            store.createIndex('timestamp', 'timestamp', { unique: false });
-            
-            console.log('Datenbank erstellt/aktualisiert');
         };
     });
 }
 
-// ========================================
-// DATENBANK OPERATIONEN
-// ========================================
+// Deutsche Zahl parsen (z.B. "1.234,56" -> "1234.56")
+function parseGermanNumber(value) {
+    if (!value) return '';
+    let str = value.toString().trim();
+    str = str.replace(/\./g, '');  // Entferne Tausenderpunkte
+    str = str.replace(',', '.');   // Komma → Punkt für parseFloat
+    return str;
+}
+
+// Eintrag in IndexedDB speichern
 async function saveEntry(entry) {
-    const db = await openDatabase();
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(CONFIG.STORE_NAME);
-        
-        const request = store.add({
-            ...entry,
-            synced: false,
-            timestamp: new Date().toISOString()
-        });
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.add(entry);
 
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-async function getUnsyncedEntries() {
-    const db = await openDatabase();
+// Eintrag als synchronisiert markieren
+async function markAsSynced(entryId) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
-        const store = transaction.objectStore(CONFIG.STORE_NAME);
-        
-        const request = store.getAll();
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(entryId);
 
         request.onsuccess = () => {
-            const allEntries = request.result || [];
-            const unsynced = allEntries.filter(entry => !entry.synced);
-            resolve(unsynced);
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function markAsSynced(id) {
-    const db = await openDatabase();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([CONFIG.STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(CONFIG.STORE_NAME);
-        
-        const getRequest = store.get(id);
-        
-        getRequest.onsuccess = () => {
-            const entry = getRequest.result;
+            const entry = request.result;
             if (entry) {
                 entry.synced = true;
                 const updateRequest = store.put(entry);
@@ -136,293 +73,276 @@ async function markAsSynced(id) {
                 resolve();
             }
         };
-        
-        getRequest.onerror = () => reject(getRequest.error);
-    });
-}
-
-async function getAllEntries() {
-    const db = await openDatabase();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([CONFIG.STORE_NAME], 'readonly');
-        const store = transaction.objectStore(CONFIG.STORE_NAME);
-        const request = store.getAll();
-
-        request.onsuccess = () => resolve(request.result || []);
         request.onerror = () => reject(request.error);
     });
 }
 
-// ========================================
-// GOOGLE SHEETS SYNCHRONISATION
-// ========================================
-async function syncToGoogleSheets(entry) {
-    if (CONFIG.SYNC_URL === 'DEINE_GOOGLE_APPS_SCRIPT_URL_HIER') {
-        console.warn('⚠️ Google Apps Script URL nicht konfiguriert!');
-        return false;
-    }
+// Unsynchronisierte Einträge abrufen
+async function getUnsyncedEntries() {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+
+        request.onsuccess = () => {
+            const entries = request.result.filter(entry => !entry.synced);
+            resolve(entries);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Mit Google Sheets synchronisieren
+async function syncToGoogleSheets(entryId) {
+    const transaction = db.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(entryId);
+
+    return new Promise((resolve, reject) => {
+        request.onsuccess = async () => {
+            const entry = request.result;
+            if (!entry) {
+                reject(new Error('Entry nicht gefunden'));
+                return;
+            }
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        datum: entry.datum,
+                        kategorie: entry.kategorie,
+                        kmStand: parseGermanNumber(entry.kmStand),
+                        kmTrip: parseGermanNumber(entry.kmTrip),
+                        spritLiter: parseGermanNumber(entry.spritLiter),
+                        kosten: parseGermanNumber(entry.kosten),
+                        preisJeLiter: parseGermanNumber(entry.preisJeLiter),
+                        tankstelle: entry.tankstelle,
+                        bemerkung: entry.bemerkung
+                    })
+                });
+
+                await markAsSynced(entryId);
+                resolve(response);
+            } catch (error) {
+                reject(error);
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Auto-Sync für unsynchronisierte Einträge
+async function autoSync() {
+    if (!navigator.onLine) return;
 
     try {
-        const response = await fetch(CONFIG.SYNC_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(entry)
-        });
-
-        console.log('✅ An Google Sheets gesendet:', entry);
-        return true;
+        const unsyncedEntries = await getUnsyncedEntries();
         
+        for (const entry of unsyncedEntries) {
+            try {
+                await syncToGoogleSheets(entry.id);
+                console.log('Auto-Sync erfolgreich für Entry:', entry.id);
+            } catch (error) {
+                console.error('Auto-Sync Fehler für Entry:', entry.id, error);
+            }
+        }
     } catch (error) {
-        console.error('❌ Google Sheets Sync Fehler:', error);
-        return false;
+        console.error('Auto-Sync Fehler:', error);
     }
 }
 
-async function syncAll() {
-    if (!navigator.onLine) {
-        console.log('⚠️ Offline - Sync übersprungen');
+// UI Helper Functions
+function showLoading(show = true) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+}
+
+function setButtonState(state) {
+    const submitButton = document.querySelector('button[type="submit"]');
+    if (!submitButton) return;
+
+    switch(state) {
+        case 'loading':
+            submitButton.disabled = true;
+            submitButton.textContent = '💾 Speichere...';
+            submitButton.style.backgroundColor = '#ffa500';
+            break;
+        case 'success':
+            submitButton.disabled = true;
+            submitButton.textContent = '✓ Gespeichert!';
+            submitButton.style.backgroundColor = '#4CAF50';
+            setTimeout(() => {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Speichern';
+                submitButton.style.backgroundColor = '';
+            }, 2000);
+            break;
+        case 'error':
+            submitButton.disabled = false;
+            submitButton.textContent = '⚠ Fehler - Erneut versuchen';
+            submitButton.style.backgroundColor = '#f44336';
+            setTimeout(() => {
+                submitButton.textContent = 'Speichern';
+                submitButton.style.backgroundColor = '';
+            }, 3000);
+            break;
+        default:
+            submitButton.disabled = false;
+            submitButton.textContent = 'Speichern';
+            submitButton.style.backgroundColor = '';
+    }
+}
+
+function showMessage(message, type = 'info') {
+    const messageDiv = document.getElementById('messageBox');
+    if (!messageDiv) return;
+
+    messageDiv.textContent = message;
+    messageDiv.className = `message ${type}`;
+    messageDiv.style.display = 'block';
+
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 4000);
+}
+
+// Formular-Handler
+async function handleSubmit(e) {
+    e.preventDefault();
+
+    // Debouncing: Verhindere mehrfaches gleichzeitiges Absenden
+    if (isSubmitting) {
+        console.log('⚠ Bereits am Speichern... Bitte warten.');
+        showMessage('Bereits am Speichern... Bitte warten.', 'warning');
         return;
     }
 
+    isSubmitting = true;
+    showLoading(true);
+    setButtonState('loading');
+
+    const form = e.target;
+
     try {
-        const entries = await getUnsyncedEntries();
-        
-        if (entries.length === 0) {
-            console.log('✅ Keine Einträge zum Synchronisieren');
-            return;
-        }
+        // Daten sammeln
+        const entry = {
+            datum: form.datum.value,
+            kategorie: form.kategorie.value,
+            kmStand: form.kmStand.value,
+            kmTrip: form.kmTrip.value,
+            spritLiter: form.spritLiter.value,
+            kosten: form.kosten.value,
+            preisJeLiter: form.preisJeLiter.value,
+            tankstelle: form.tankstelle.value,
+            bemerkung: form.bemerkung.value,
+            synced: false,
+            timestamp: new Date().toISOString()
+        };
 
-        console.log(`🔄 Synchronisiere ${entries.length} Einträge...`);
+        // In IndexedDB speichern
+        const entryId = await saveEntry(entry);
+        console.log('✓ In IndexedDB gespeichert:', entryId);
 
-        for (const entry of entries) {
-            const success = await syncToGoogleSheets(entry);
-            if (success) {
-                await markAsSynced(entry.id);
-                console.log(`✅ Eintrag ${entry.id} synchronisiert`);
+        // Versuche sofort zu synchronisieren (wenn online)
+        if (navigator.onLine) {
+            try {
+                await syncToGoogleSheets(entryId);
+                console.log('✓ Mit Google Sheets synchronisiert');
+                showMessage('Erfolgreich gespeichert und synchronisiert!', 'success');
+            } catch (syncError) {
+                console.error('⚠ Sync-Fehler (wird später erneut versucht):', syncError);
+                showMessage('Gespeichert! Wird synchronisiert sobald Verbindung stabil ist.', 'info');
             }
+        } else {
+            showMessage('Offline gespeichert! Wird synchronisiert sobald du online bist.', 'info');
         }
 
-        await updatePendingCount();
-        showNotification('✅ Synchronisation erfolgreich!', 'success');
+        // Formular zurücksetzen
+        form.reset();
         
+        // Datum auf heute setzen
+        const today = new Date().toISOString().split('T')[0];
+        form.datum.value = today;
+
+        setButtonState('success');
+
     } catch (error) {
-        console.error('Synchronisierungsfehler:', error);
-        showNotification('⚠️ Synchronisierungsfehler', 'error');
+        console.error('❌ Fehler beim Speichern:', error);
+        showMessage('Fehler beim Speichern! Bitte erneut versuchen.', 'error');
+        setButtonState('error');
+    } finally {
+        showLoading(false);
+        isSubmitting = false;
     }
 }
 
-// ========================================
-// UI FUNKTIONEN
-// ========================================
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-        color: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        z-index: 1000;
-        animation: slideIn 0.3s ease;
-    `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
+// Online/Offline Status aktualisieren
 function updateOnlineStatus() {
     const indicator = document.getElementById('onlineStatus');
     const statusText = document.getElementById('statusText');
-    
+    const badge = document.getElementById('pendingBadge');
+
     if (navigator.onLine) {
         if (indicator) indicator.className = 'online-indicator online';
         if (statusText) statusText.textContent = 'Online';
-        syncAll();
+        
+        // Auto-Sync starten
+        autoSync();
+        
+        // Pending-Badge aktualisieren
+        getUnsyncedEntries().then(entries => {
+            if (badge && entries.length > 0) {
+                badge.textContent = entries.length;
+                badge.style.display = 'inline-block';
+            } else if (badge) {
+                badge.style.display = 'none';
+            }
+        });
     } else {
         if (indicator) indicator.className = 'online-indicator offline';
         if (statusText) statusText.textContent = 'Offline';
     }
 }
 
-async function updatePendingCount() {
+// App initialisieren
+document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const entries = await getUnsyncedEntries();
-        const count = entries.length;
-        const badge = document.getElementById('pendingBadge');
-        
-        if (badge) {
-            if (count > 0) {
-                badge.textContent = count;
-                badge.style.display = 'inline-block';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-    } catch (error) {
-        console.error('Fehler beim Aktualisieren der Pending-Anzahl:', error);
-    }
-}
+        await initDB();
+        console.log('✓ IndexedDB initialisiert');
 
-// ========================================
-// FORMULAR HANDLING
-// ========================================
-async function handleSubmit(event) {
-    event.preventDefault();
-
-    const form = event.target;
-    
-    // FIXED: Verwende "kategorie" statt "tag" um mit Google Apps Script übereinzustimmen
-    const entry = {
-        datum: form.datum.value,
-        kategorie: form.tag.value,  // ← GEÄNDERT von "tag" zu "kategorie"
-        kmStand: parseGermanNumber(form.kmStand.value),
-        kmTrip: parseGermanNumber(form.kmTrip.value),
-        spritLiter: parseGermanNumber(form.spritLiter.value),
-        kosten: parseGermanNumber(form.kosten.value),
-        preisJeLiter: parseGermanNumber(form.preisJeLiter.value),
-        tankstelle: form.tankstelle.value,
-        bemerkung: form.bemerkung.value
-    };
-
-    console.log('=== FORMULAR DATEN ===');
-    console.log('Original kmStand:', form.kmStand.value);
-    console.log('Bereinigt kmStand:', entry.kmStand);
-    console.log('Vollständiger Eintrag:', entry);
-
-    try {
-        // Speichere lokal
-        const entryId = await saveEntry(entry);
-        console.log('✅ Lokal gespeichert:', entry);
-
-        // Versuche sofort zu synchronisieren wenn online
-        if (navigator.onLine) {
-            const synced = await syncToGoogleSheets(entry);
-            if (synced) {
-                await markAsSynced(entryId);
-                console.log(`✅ Eintrag ${entryId} sofort synchronisiert`);
-            }
+        const form = document.getElementById('fahrtenbuchForm');
+        if (form) {
+            form.addEventListener('submit', handleSubmit);
+            
+            // Datum auf heute setzen
+            const today = new Date().toISOString().split('T')[0];
+            form.datum.value = today;
         }
 
-        showNotification('✅ Eintrag gespeichert!', 'success');
-        form.reset();
-        
-        // Setze Datum auf heute und Tag auf "Tanken"
-        form.datum.value = new Date().toISOString().split('T')[0];
-        form.tag.value = 'Tanken';
-        
-        await updatePendingCount();
+        // Online/Offline Events
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus();
+
+        // Auto-Sync alle 30 Sekunden
+        setInterval(autoSync, 30000);
 
     } catch (error) {
-        console.error('Fehler beim Speichern:', error);
-        showNotification('❌ Fehler beim Speichern', 'error');
-    }
-}
-
-function resetForm() {
-    const form = document.getElementById('fahrtenbuchForm');
-    form.reset();
-    form.datum.value = new Date().toISOString().split('T')[0];
-    form.tag.value = 'Tanken';
-}
-
-// ========================================
-// PWA INSTALLATION
-// ========================================
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    
-    const installBtn = document.getElementById('installBtn');
-    if (installBtn) {
-        installBtn.style.display = 'block';
+        console.error('❌ Initialisierungsfehler:', error);
+        showMessage('App konnte nicht initialisiert werden!', 'error');
     }
 });
 
-async function installApp() {
-    if (!deferredPrompt) {
-        showNotification('⚠️ Installation nicht verfügbar', 'error');
-        return;
-    }
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-        showNotification('✅ App installiert!', 'success');
-    }
-    
-    deferredPrompt = null;
-    document.getElementById('installBtn').style.display = 'none';
-}
-
-// ========================================
-// SERVICE WORKER REGISTRATION
-// ========================================
+// Service Worker registrieren
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/fahrtenbuch/sw.js')
-        .then(reg => console.log('Service Worker registriert', reg))
-        .catch(err => console.log('Service Worker Fehler', err));
+        .then(reg => console.log('✓ Service Worker registriert'))
+        .catch(err => console.error('❌ Service Worker Fehler:', err));
 }
-
-// ========================================
-// EVENT LISTENERS
-// ========================================
-document.addEventListener('DOMContentLoaded', () => {
-    // VERSIONSPRÜFUNG - ZEIGE VERSION IN KONSOLE
-    console.log('╔════════════════════════════════════════╗');
-    console.log('║  FAHRTENBUCH APP GELADEN              ║');
-    console.log('╚════════════════════════════════════════╝');
-    console.log('Version:', CONFIG.VERSION);
-    console.log('Wenn du nicht "2.4-FINAL" siehst, ist der Cache noch aktiv!');
-    console.log('');
-    
-    // Formular
-    const form = document.getElementById('fahrtenbuchForm');
-    if (form) {
-        form.addEventListener('submit', handleSubmit);
-        // Setze heutiges Datum und Tag als Standard
-        form.datum.value = new Date().toISOString().split('T')[0];
-        form.tag.value = 'Tanken';
-    }
-
-    // Reset Button
-    const resetBtn = document.getElementById('resetBtn');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', resetForm);
-    }
-
-    // Install Button
-    const installBtn = document.getElementById('installBtn');
-    if (installBtn) {
-        installBtn.addEventListener('click', installApp);
-    }
-
-    // Online/Offline Status
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-    
-    // Initiale Updates
-    updateOnlineStatus();
-    updatePendingCount();
-});
-
-// Auto-Sync alle 30 Sekunden wenn online
-setInterval(() => {
-    if (navigator.onLine) {
-        syncAll();
-    }
-}, 30000);
