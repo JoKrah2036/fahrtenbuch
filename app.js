@@ -1,4 +1,4 @@
-// Fahrtenbuch App - Version 2.6 - Fix für doppelte Einträge
+// Fahrtenbuch App - Version 2.8 - Performance-Optimierungen
 
 const DB_NAME = 'FahrtenbuchDB';
 const DB_VERSION = 2;
@@ -6,8 +6,8 @@ const STORE_NAME = 'entries';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-eD72ziXaRTMxwi7tfFRYOf4sXc0aFqL0YzUz8bbqSxZUUHf30SSCoW1/exec';
 
 let db;
-let isSubmitting = false; // Debouncing-Flag
-let currentlySyncing = new Set(); // Track welche IDs gerade synchronisiert werden
+let isSubmitting = false;
+let currentlySyncing = new Set();
 
 // IndexedDB initialisieren
 async function initDB() {
@@ -35,12 +35,12 @@ async function initDB() {
     });
 }
 
-// Deutsche Zahl parsen (z.B. "1.234,56" -> "1234.56")
+// Deutsche Zahl parsen
 function parseGermanNumber(value) {
     if (!value) return '';
     let str = value.toString().trim();
-    str = str.replace(/\./g, '');  // Entferne Tausenderpunkte
-    str = str.replace(',', '.');   // Komma → Punkt für parseFloat
+    str = str.replace(/\./g, '');
+    str = str.replace(',', '.');
     return str;
 }
 
@@ -93,9 +93,8 @@ async function getUnsyncedEntries() {
     });
 }
 
-// Mit Google Sheets synchronisieren
+// Mit Google Sheets synchronisieren (mit Timeout)
 async function syncToGoogleSheets(entryId) {
-    // Verhindere doppelte Sync-Versuche für denselben Entry
     if (currentlySyncing.has(entryId)) {
         console.log('⚠ Entry', entryId, 'wird bereits synchronisiert, überspringe...');
         return;
@@ -118,6 +117,10 @@ async function syncToGoogleSheets(entryId) {
                 }
 
                 try {
+                    // WICHTIG: Timeout für Fetch-Request (5 Sekunden)
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
                     const response = await fetch(GOOGLE_SCRIPT_URL, {
                         method: 'POST',
                         mode: 'no-cors',
@@ -134,14 +137,18 @@ async function syncToGoogleSheets(entryId) {
                             preisJeLiter: parseGermanNumber(entry.preisJeLiter),
                             tankstelle: entry.tankstelle,
                             bemerkung: entry.bemerkung
-                        })
+                        }),
+                        signal: controller.signal
                     });
 
+                    clearTimeout(timeoutId);
                     await markAsSynced(entryId);
                     currentlySyncing.delete(entryId);
                     resolve(response);
                 } catch (error) {
                     currentlySyncing.delete(entryId);
+                    // Bei Timeout oder Netzwerkfehler: Entry bleibt unsynced für späteren Retry
+                    console.log('Sync-Fehler für Entry', entryId, '- wird später erneut versucht');
                     reject(error);
                 }
             };
@@ -163,8 +170,10 @@ async function autoSync() {
     try {
         const unsyncedEntries = await getUnsyncedEntries();
         
+        // Zeige Badge wenn unsynchronisierte Einträge vorhanden
+        updatePendingBadge(unsyncedEntries.length);
+        
         for (const entry of unsyncedEntries) {
-            // Überspringe Entries die gerade synchronisiert werden
             if (currentlySyncing.has(entry.id)) {
                 console.log('Auto-Sync: Entry', entry.id, 'wird bereits synchronisiert, überspringe...');
                 continue;
@@ -172,13 +181,31 @@ async function autoSync() {
 
             try {
                 await syncToGoogleSheets(entry.id);
-                console.log('Auto-Sync erfolgreich für Entry:', entry.id);
+                console.log('✓ Auto-Sync erfolgreich für Entry:', entry.id);
             } catch (error) {
-                console.error('Auto-Sync Fehler für Entry:', entry.id, error);
+                console.log('⚠ Auto-Sync Fehler für Entry:', entry.id, '- Retry beim nächsten Intervall');
             }
         }
+        
+        // Badge aktualisieren nach Sync
+        const remainingEntries = await getUnsyncedEntries();
+        updatePendingBadge(remainingEntries.length);
+        
     } catch (error) {
         console.error('Auto-Sync Fehler:', error);
+    }
+}
+
+// Pending-Badge aktualisieren
+function updatePendingBadge(count) {
+    const badge = document.getElementById('pendingBadge');
+    if (badge) {
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 }
 
@@ -208,7 +235,7 @@ function setButtonState(state) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Speichern';
                 submitButton.style.backgroundColor = '';
-            }, 2000);
+            }, 1500); // Reduziert von 2000 auf 1500ms
             break;
         case 'error':
             submitButton.disabled = false;
@@ -236,14 +263,13 @@ function showMessage(message, type = 'info') {
 
     setTimeout(() => {
         messageDiv.style.display = 'none';
-    }, 4000);
+    }, 3000); // Reduziert von 4000 auf 3000ms
 }
 
-// Formular-Handler
+// OPTIMISTISCHES UI: Formular-Handler
 async function handleSubmit(e) {
     e.preventDefault();
 
-    // Debouncing: Verhindere mehrfaches gleichzeitiges Absenden
     if (isSubmitting) {
         console.log('⚠ Bereits am Speichern... Bitte warten.');
         showMessage('Bereits am Speichern... Bitte warten.', 'warning');
@@ -251,7 +277,6 @@ async function handleSubmit(e) {
     }
 
     isSubmitting = true;
-    showLoading(true);
     setButtonState('loading');
 
     const form = e.target;
@@ -272,39 +297,43 @@ async function handleSubmit(e) {
             timestamp: new Date().toISOString()
         };
 
-        // In IndexedDB speichern
+        // SCHRITT 1: In IndexedDB speichern (SCHNELL)
         const entryId = await saveEntry(entry);
         console.log('✓ In IndexedDB gespeichert:', entryId);
 
-        // Versuche sofort zu synchronisieren (wenn online)
-        if (navigator.onLine) {
-            try {
-                await syncToGoogleSheets(entryId);
-                console.log('✓ Mit Google Sheets synchronisiert');
-                showMessage('Erfolgreich gespeichert und synchronisiert!', 'success');
-            } catch (syncError) {
-                console.error('⚠ Sync-Fehler (wird später erneut versucht):', syncError);
-                showMessage('Gespeichert! Wird synchronisiert sobald Verbindung stabil ist.', 'info');
-            }
-        } else {
-            showMessage('Offline gespeichert! Wird synchronisiert sobald du online bist.', 'info');
-        }
-
-        // Formular zurücksetzen
+        // SCHRITT 2: SOFORT Formular zurücksetzen (OPTIMISTISCH)
         form.reset();
-        
-        // Datum auf heute setzen
         const today = new Date().toISOString().split('T')[0];
         form.datum.value = today;
-
+        
         setButtonState('success');
+        showMessage('Gespeichert! Wird synchronisiert...', 'success');
+
+        // SCHRITT 3: Im Hintergrund synchronisieren (NICHT BLOCKIEREND)
+        // Wir warten NICHT auf das Ergebnis!
+        if (navigator.onLine) {
+            syncToGoogleSheets(entryId)
+                .then(() => {
+                    console.log('✓ Mit Google Sheets synchronisiert');
+                    // Badge aktualisieren
+                    getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
+                })
+                .catch((error) => {
+                    console.log('⚠ Sync-Fehler (wird später erneut versucht):', error);
+                    // Badge aktualisieren
+                    getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
+                });
+        } else {
+            console.log('Offline - Eintrag wird später synchronisiert');
+            // Badge aktualisieren
+            getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
+        }
 
     } catch (error) {
         console.error('❌ Fehler beim Speichern:', error);
         showMessage('Fehler beim Speichern! Bitte erneut versuchen.', 'error');
         setButtonState('error');
     } finally {
-        showLoading(false);
         isSubmitting = false;
     }
 }
@@ -313,24 +342,13 @@ async function handleSubmit(e) {
 function updateOnlineStatus() {
     const indicator = document.getElementById('onlineStatus');
     const statusText = document.getElementById('statusText');
-    const badge = document.getElementById('pendingBadge');
 
     if (navigator.onLine) {
         if (indicator) indicator.className = 'online-indicator online';
         if (statusText) statusText.textContent = 'Online';
         
-        // Auto-Sync starten
+        // Sofort Auto-Sync starten wenn online
         autoSync();
-        
-        // Pending-Badge aktualisieren
-        getUnsyncedEntries().then(entries => {
-            if (badge && entries.length > 0) {
-                badge.textContent = entries.length;
-                badge.style.display = 'inline-block';
-            } else if (badge) {
-                badge.style.display = 'none';
-            }
-        });
     } else {
         if (indicator) indicator.className = 'online-indicator offline';
         if (statusText) statusText.textContent = 'Offline';
@@ -357,8 +375,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.addEventListener('offline', updateOnlineStatus);
         updateOnlineStatus();
 
-        // Auto-Sync alle 30 Sekunden
-        setInterval(autoSync, 30000);
+        // Auto-Sync alle 10 Sekunden (statt 30!)
+        setInterval(autoSync, 10000);
+        
+        // Sofort prüfen ob unsynchronisierte Einträge vorhanden
+        const unsyncedEntries = await getUnsyncedEntries();
+        if (unsyncedEntries.length > 0) {
+            console.log(`⚠ ${unsyncedEntries.length} unsynchronisierte Einträge gefunden`);
+            updatePendingBadge(unsyncedEntries.length);
+            // Sofort versuchen zu synchronisieren
+            if (navigator.onLine) {
+                autoSync();
+            }
+        }
 
     } catch (error) {
         console.error('❌ Initialisierungsfehler:', error);
