@@ -1,5 +1,5 @@
 // Service Worker für Fahrtenbuch PWA
-const CACHE_VERSION = 'v6'; // VERSION ERHÖHT von v5 auf v6
+const CACHE_VERSION = 'v7'; // VERSION ERHÖHT von v6 auf v7 (Fix für doppelte Einträge)
 const urlsToCache = [
     '/fahrtenbuch/',
     '/fahrtenbuch/index.html',
