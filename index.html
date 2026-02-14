@@ -278,7 +278,7 @@
             <img src="/fahrtenbuch/icon-192.png" alt="Fahrtenbuch Logo" class="app-logo">
             <div id="pendingBadge" class="pending-badge">0</div>
             <h1>Fahrtenbuch</h1>
-            <p class="subtitle">Tankstellen-Eintrag erfassen</p>
+            <p class="subtitle">Eintrag erfassen</p>
             <div class="version-badge">Version 2.8</div>
         </div>
 
@@ -295,6 +295,7 @@
                 <label for="kategorie">Kategorie *</label>
                 <select id="kategorie" name="kategorie" required>
                     <option value="Tanken">Tanken</option>
+                    <option value="Sonderfahrt">Sonderfahrt</option>
                     <option value="Werkstatt">Werkstatt</option>
                     <option value="Sonstiges">Sonstiges</option>
                 </select>
@@ -306,28 +307,28 @@
             </div>
 
             <div class="form-group">
-                <label for="kmTrip">Km-Trip *</label>
-                <input type="text" id="kmTrip" name="kmTrip" placeholder="z.B. 450" required>
+                <label for="kmTrip">Km-Trip</label>
+                <input type="text" id="kmTrip" name="kmTrip" placeholder="z.B. 450">
             </div>
 
             <div class="form-group">
-                <label for="spritLiter">Sprit Liter *</label>
-                <input type="text" id="spritLiter" name="spritLiter" placeholder="z.B. 35,42" required>
+                <label for="spritLiter">Sprit Liter</label>
+                <input type="text" id="spritLiter" name="spritLiter" placeholder="z.B. 35,42">
             </div>
 
             <div class="form-group">
-                <label for="kosten">Kosten (€) *</label>
-                <input type="text" id="kosten" name="kosten" placeholder="z.B. 50,00" required>
+                <label for="kosten">Kosten (€)</label>
+                <input type="text" id="kosten" name="kosten" placeholder="z.B. 50,00">
             </div>
 
             <div class="form-group">
-                <label for="preisJeLiter">Preis je Liter (€) *</label>
-                <input type="text" id="preisJeLiter" name="preisJeLiter" placeholder="z.B. 1,419" required>
+                <label for="preisJeLiter">Preis je Liter (€)</label>
+                <input type="text" id="preisJeLiter" name="preisJeLiter" placeholder="z.B. 1,419">
             </div>
 
             <div class="form-group">
-                <label for="tankstelle">Tankstelle *</label>
-                <input type="text" id="tankstelle" name="tankstelle" placeholder="z.B. Shell, Aral" required>
+                <label for="tankstelle">Tankstelle / Ort</label>
+                <input type="text" id="tankstelle" name="tankstelle" placeholder="z.B. Shell, Aral">
             </div>
 
             <div class="form-group">
