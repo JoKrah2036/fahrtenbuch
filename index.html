@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#4285f4">
+    <meta name="theme-color" content="#2196F3">
     <title>Fahrtenbuch</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="manifest" href="/fahrtenbuch/manifest.json">
+    <link rel="icon" type="image/png" href="/fahrtenbuch/icon-192.png">
     <style>
         * {
             margin: 0;
@@ -19,81 +19,32 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            display: inline-flex;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
+            background: white;
             border-radius: 20px;
-            font-size: 0.9em;
-        }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-            background: #4ade80;
-        }
-
-        .status-dot.offline {
-            background: #fbbf24;
-        }
-
-        .install-prompt {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .install-prompt h3 {
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-        }
-
-        .install-prompt p {
-            color: #666;
-            margin-bottom: 15px;
-        }
-
-        .install-button {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .card {
-            background: white;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
         }
 
         .form-group {
@@ -103,27 +54,24 @@
         label {
             display: block;
             margin-bottom: 8px;
-            color: #333;
+            color: #555;
             font-weight: 500;
+            font-size: 14px;
         }
 
-        input, textarea, select {
+        input, select, textarea {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e5e7eb;
+            border: 2px solid #e0e0e0;
             border-radius: 8px;
-            font-size: 1em;
+            font-size: 16px;
             transition: border-color 0.3s;
+            font-family: inherit;
         }
 
-        input:focus, textarea:focus, select:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: #667eea;
-        }
-
-        select {
-            cursor: pointer;
-            background-color: white;
         }
 
         textarea {
@@ -131,83 +79,58 @@
             min-height: 80px;
         }
 
-        /* Besondere Styles für numerische Eingaben auf mobilen Geräten */
-        input[type="text"][inputmode="numeric"],
-        input[type="number"] {
-            font-variant-numeric: tabular-nums;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 30px;
-        }
-
         button {
-            flex: 1;
-            padding: 14px;
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
             border: none;
             border-radius: 8px;
-            font-size: 1em;
+            font-size: 18px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s;
+            margin-top: 10px;
         }
 
-        button:active {
-            transform: scale(0.98);
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
         }
 
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #666;
+        button:active:not(:disabled) {
+            transform: translateY(0);
         }
 
-        .sync-info {
-            text-align: center;
-            color: white;
-            margin-top: 20px;
-            font-size: 0.9em;
-        }
-
-        .success-message {
-            background: #10b981;
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+        /* Loading Overlay */
+        #loadingOverlay {
             display: none;
-        }
-
-        .error-message {
-            background: #ef4444;
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            color: white;
-            margin: 20px 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
         }
 
         .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top: 3px solid white;
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #fff;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
         }
 
         @keyframes spin {
@@ -215,133 +138,179 @@
             100% { transform: rotate(360deg); }
         }
 
-        .field-hint {
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 4px;
+        #loadingOverlay p {
+            color: white;
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        /* Message Box */
+        #messageBox {
+            display: none;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            input, select, textarea, button {
+                font-size: 16px; /* Verhindert Zoom auf iOS */
+            }
+        }
+
+        /* PWA Install Prompt */
+        .install-prompt {
+            background: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .install-prompt button {
+            background: white;
+            color: #4CAF50;
+            margin-top: 10px;
+            padding: 10px 20px;
+            width: auto;
+        }
+
+        /* Status Indicator (optional - nur wenn in HTML vorhanden) */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .online-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .online-indicator.online {
+            background: #4CAF50;
+        }
+
+        .online-indicator.offline {
+            background: #f44336;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚗 Fahrtenbuch</h1>
-            <div class="status">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Online</span>
-            </div>
-        </div>
-
-        <div class="install-prompt" id="installPrompt" style="display: none;">
-            <h3>📱 Als App installieren</h3>
-            <p>Installiere das Fahrtenbuch auf deinem Startbildschirm für schnellen Zugriff!</p>
-            <button class="install-button" id="installButton">Jetzt installieren</button>
-        </div>
-
-        <div class="success-message" id="successMessage">
-            ✓ Eintrag erfolgreich gespeichert!
-        </div>
-
-        <div class="error-message" id="errorMessage">
-            ✗ Fehler beim Speichern. Wird erneut versucht...
-        </div>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Wird gespeichert...</p>
-        </div>
-
-        <div class="card">
-            <form id="fahrtenbuchForm">
-                <div class="form-group">
-                    <label for="datum">Datum *</label>
-                    <input type="date" id="datum" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="tag">Kategorie *</label>
-                    <select id="tag" required>
-                        <option value="Tanken" selected>⛽ Tanken</option>
-                        <option value="Sonderfahrt">🚗 Sonderfahrt</option>
-                        <option value="Werkstatt">🔧 Werkstatt</option>
-                        <option value="Sonstiges">📝 Sonstiges</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="kmStand">Km-Stand (optional)</label>
-                    <input 
-                        type="text" 
-                        id="kmStand" 
-                        inputmode="numeric"
-                        pattern="[0-9.,]*"
-                        placeholder="z.B. 233300 oder 233.300">
-                    <div class="field-hint">Punkte werden automatisch als Tausender-Trenner entfernt</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="kmTrip">Km-Trip (optional)</label>
-                    <input 
-                        type="text" 
-                        id="kmTrip" 
-                        inputmode="numeric"
-                        pattern="[0-9.,]*"
-                        placeholder="z.B. 487">
-                </div>
-
-                <div class="form-group">
-                    <label for="spritLiter">Sprit Liter (optional)</label>
-                    <input 
-                        type="text" 
-                        id="spritLiter" 
-                        inputmode="decimal"
-                        pattern="[0-9.,]*"
-                        placeholder="z.B. 40,50 oder 40.50">
-                    <div class="field-hint">Komma wird als Dezimaltrennzeichen verwendet</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="kosten">Kosten in € (optional)</label>
-                    <input 
-                        type="text" 
-                        id="kosten" 
-                        inputmode="decimal"
-                        pattern="[0-9.,]*"
-                        placeholder="z.B. 60,75 oder 60.75">
-                </div>
-
-                <div class="form-group">
-                    <label for="preisJeLiter">Preis je ltr. (optional)</label>
-                    <input 
-                        type="text" 
-                        id="preisJeLiter" 
-                        inputmode="decimal"
-                        pattern="[0-9.,]*"
-                        placeholder="z.B. 1,499 oder 1.499">
-                </div>
-
-                <div class="form-group">
-                    <label for="tankstelle">Tankstelle (optional)</label>
-                    <input type="text" id="tankstelle" placeholder="z.B. Shell, Aral, Esso">
-                </div>
-
-                <div class="form-group">
-                    <label for="bemerkung">Bemerkung (optional)</label>
-                    <textarea id="bemerkung" placeholder="z.B. Kundenbesuch, Dienstfahrt, etc."></textarea>
-                </div>
-
-                <div class="button-group">
-                    <button type="submit" class="btn-primary">Speichern</button>
-                    <button type="button" class="btn-secondary" id="resetButton">Zurücksetzen</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="sync-info" id="syncInfo">
-            Alle Daten werden automatisch synchronisiert
-        </div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>Speichere Eintrag...</p>
     </div>
 
-    <script src="app.js"></script>
+    <div class="container">
+        <h1>🚗 Fahrtenbuch</h1>
+        <p class="subtitle">Tankstellen-Eintrag erfassen</p>
+
+        <!-- Message Box -->
+        <div id="messageBox"></div>
+
+        <form id="fahrtenbuchForm">
+            <div class="form-group">
+                <label for="datum">Datum *</label>
+                <input type="date" id="datum" name="datum" required>
+            </div>
+
+            <div class="form-group">
+                <label for="kategorie">Kategorie *</label>
+                <select id="kategorie" name="kategorie" required>
+                    <option value="Tanken">Tanken</option>
+                    <option value="Werkstatt">Werkstatt</option>
+                    <option value="Sonstiges">Sonstiges</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="kmStand">Km-Stand *</label>
+                <input type="text" id="kmStand" name="kmStand" placeholder="z.B. 123.456" required>
+            </div>
+
+            <div class="form-group">
+                <label for="kmTrip">Km-Trip *</label>
+                <input type="text" id="kmTrip" name="kmTrip" placeholder="z.B. 450" required>
+            </div>
+
+            <div class="form-group">
+                <label for="spritLiter">Sprit Liter *</label>
+                <input type="text" id="spritLiter" name="spritLiter" placeholder="z.B. 35,42" required>
+            </div>
+
+            <div class="form-group">
+                <label for="kosten">Kosten (€) *</label>
+                <input type="text" id="kosten" name="kosten" placeholder="z.B. 50,00" required>
+            </div>
+
+            <div class="form-group">
+                <label for="preisJeLiter">Preis je Liter (€) *</label>
+                <input type="text" id="preisJeLiter" name="preisJeLiter" placeholder="z.B. 1,419" required>
+            </div>
+
+            <div class="form-group">
+                <label for="tankstelle">Tankstelle *</label>
+                <input type="text" id="tankstelle" name="tankstelle" placeholder="z.B. Shell, Aral" required>
+            </div>
+
+            <div class="form-group">
+                <label for="bemerkung">Bemerkung</label>
+                <textarea id="bemerkung" name="bemerkung" placeholder="Optional: Zusätzliche Notizen"></textarea>
+            </div>
+
+            <button type="submit">Speichern</button>
+        </form>
+    </div>
+
+    <script src="/fahrtenbuch/app.js"></script>
 </body>
 </html>
