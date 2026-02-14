@@ -1,4 +1,4 @@
-// Fahrtenbuch App - Version 2.8 - Performance-Optimierungen
+// Fahrtenbuch App - Version 2.8 - Mit dynamischen Feldern
 
 const DB_NAME = 'FahrtenbuchDB';
 const DB_VERSION = 2;
@@ -42,6 +42,62 @@ function parseGermanNumber(value) {
     str = str.replace(/\./g, '');
     str = str.replace(',', '.');
     return str;
+}
+
+// Felder basierend auf Kategorie anpassen
+function updateFieldsForCategory() {
+    const kategorie = document.getElementById('kategorie').value;
+    
+    // Felder die NUR bei Tanken relevant sind
+    const tankFields = ['group-kmTrip', 'group-spritLiter', 'group-preisJeLiter'];
+    
+    if (kategorie === 'Werkstatt' || kategorie === 'Sonstiges') {
+        // Werkstatt/Sonstiges: Nur Datum, Kategorie, Km-Stand, Bemerkung
+        tankFields.forEach(fieldId => {
+            const group = document.getElementById(fieldId);
+            if (group) group.classList.add('hidden');
+        });
+        
+        // Tankstelle umbenennen zu "Ort"
+        const tankstelleLabel = document.querySelector('label[for="tankstelle"]');
+        if (tankstelleLabel) {
+            tankstelleLabel.innerHTML = 'Ort <span class="optional-hint">(optional)</span>';
+        }
+        
+        // Kosten-Label anpassen
+        const kostenLabel = document.querySelector('label[for="kosten"]');
+        if (kostenLabel) {
+            kostenLabel.innerHTML = 'Kosten (€) <span class="optional-hint">(optional)</span>';
+        }
+        
+    } else if (kategorie === 'Sonderfahrt') {
+        // Sonderfahrt: Datum, Kategorie, Km-Stand, Km-Trip, Tankstelle, Bemerkung
+        document.getElementById('group-kmTrip')?.classList.remove('hidden');
+        document.getElementById('group-spritLiter')?.classList.add('hidden');
+        document.getElementById('group-kosten')?.classList.remove('hidden');
+        document.getElementById('group-preisJeLiter')?.classList.add('hidden');
+        document.getElementById('group-tankstelle')?.classList.remove('hidden');
+        
+        const tankstelleLabel = document.querySelector('label[for="tankstelle"]');
+        if (tankstelleLabel) {
+            tankstelleLabel.innerHTML = 'Ort <span class="optional-hint">(optional)</span>';
+        }
+        
+    } else {
+        // Tanken: Alle Felder sichtbar
+        tankFields.forEach(fieldId => {
+            const group = document.getElementById(fieldId);
+            if (group) group.classList.remove('hidden');
+        });
+        
+        document.getElementById('group-kosten')?.classList.remove('hidden');
+        document.getElementById('group-tankstelle')?.classList.remove('hidden');
+        
+        const tankstelleLabel = document.querySelector('label[for="tankstelle"]');
+        if (tankstelleLabel) {
+            tankstelleLabel.innerHTML = 'Tankstelle <span class="optional-hint">(optional)</span>';
+        }
+    }
 }
 
 // Eintrag in IndexedDB speichern
@@ -117,7 +173,6 @@ async function syncToGoogleSheets(entryId) {
                 }
 
                 try {
-                    // WICHTIG: Timeout für Fetch-Request (5 Sekunden)
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -147,7 +202,6 @@ async function syncToGoogleSheets(entryId) {
                     resolve(response);
                 } catch (error) {
                     currentlySyncing.delete(entryId);
-                    // Bei Timeout oder Netzwerkfehler: Entry bleibt unsynced für späteren Retry
                     console.log('Sync-Fehler für Entry', entryId, '- wird später erneut versucht');
                     reject(error);
                 }
@@ -169,8 +223,6 @@ async function autoSync() {
 
     try {
         const unsyncedEntries = await getUnsyncedEntries();
-        
-        // Zeige Badge wenn unsynchronisierte Einträge vorhanden
         updatePendingBadge(unsyncedEntries.length);
         
         for (const entry of unsyncedEntries) {
@@ -187,7 +239,6 @@ async function autoSync() {
             }
         }
         
-        // Badge aktualisieren nach Sync
         const remainingEntries = await getUnsyncedEntries();
         updatePendingBadge(remainingEntries.length);
         
@@ -235,7 +286,7 @@ function setButtonState(state) {
                 submitButton.disabled = false;
                 submitButton.textContent = 'Speichern';
                 submitButton.style.backgroundColor = '';
-            }, 1500); // Reduziert von 2000 auf 1500ms
+            }, 1500);
             break;
         case 'error':
             submitButton.disabled = false;
@@ -263,10 +314,10 @@ function showMessage(message, type = 'info') {
 
     setTimeout(() => {
         messageDiv.style.display = 'none';
-    }, 3000); // Reduziert von 4000 auf 3000ms
+    }, 3000);
 }
 
-// OPTIMISTISCHES UI: Formular-Handler
+// Formular-Handler
 async function handleSubmit(e) {
     e.preventDefault();
 
@@ -282,7 +333,6 @@ async function handleSubmit(e) {
     const form = e.target;
 
     try {
-        // Daten sammeln
         const entry = {
             datum: form.datum.value,
             kategorie: form.kategorie.value,
@@ -297,35 +347,31 @@ async function handleSubmit(e) {
             timestamp: new Date().toISOString()
         };
 
-        // SCHRITT 1: In IndexedDB speichern (SCHNELL)
         const entryId = await saveEntry(entry);
         console.log('✓ In IndexedDB gespeichert:', entryId);
 
-        // SCHRITT 2: SOFORT Formular zurücksetzen (OPTIMISTISCH)
         form.reset();
         const today = new Date().toISOString().split('T')[0];
         form.datum.value = today;
         
+        // Felder nach Reset wieder anpassen
+        updateFieldsForCategory();
+        
         setButtonState('success');
         showMessage('Gespeichert! Wird synchronisiert...', 'success');
 
-        // SCHRITT 3: Im Hintergrund synchronisieren (NICHT BLOCKIEREND)
-        // Wir warten NICHT auf das Ergebnis!
         if (navigator.onLine) {
             syncToGoogleSheets(entryId)
                 .then(() => {
                     console.log('✓ Mit Google Sheets synchronisiert');
-                    // Badge aktualisieren
                     getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
                 })
                 .catch((error) => {
                     console.log('⚠ Sync-Fehler (wird später erneut versucht):', error);
-                    // Badge aktualisieren
                     getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
                 });
         } else {
             console.log('Offline - Eintrag wird später synchronisiert');
-            // Badge aktualisieren
             getUnsyncedEntries().then(entries => updatePendingBadge(entries.length));
         }
 
@@ -346,8 +392,6 @@ function updateOnlineStatus() {
     if (navigator.onLine) {
         if (indicator) indicator.className = 'online-indicator online';
         if (statusText) statusText.textContent = 'Online';
-        
-        // Sofort Auto-Sync starten wenn online
         autoSync();
     } else {
         if (indicator) indicator.className = 'online-indicator offline';
@@ -365,25 +409,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (form) {
             form.addEventListener('submit', handleSubmit);
             
-            // Datum auf heute setzen
             const today = new Date().toISOString().split('T')[0];
             form.datum.value = today;
+            
+            // Kategorie-Wechsel Handler
+            const kategorieSelect = document.getElementById('kategorie');
+            if (kategorieSelect) {
+                kategorieSelect.addEventListener('change', updateFieldsForCategory);
+                updateFieldsForCategory(); // Initial ausführen
+            }
         }
 
-        // Online/Offline Events
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
         updateOnlineStatus();
 
-        // Auto-Sync alle 10 Sekunden (statt 30!)
         setInterval(autoSync, 10000);
         
-        // Sofort prüfen ob unsynchronisierte Einträge vorhanden
         const unsyncedEntries = await getUnsyncedEntries();
         if (unsyncedEntries.length > 0) {
             console.log(`⚠ ${unsyncedEntries.length} unsynchronisierte Einträge gefunden`);
             updatePendingBadge(unsyncedEntries.length);
-            // Sofort versuchen zu synchronisieren
             if (navigator.onLine) {
                 autoSync();
             }
