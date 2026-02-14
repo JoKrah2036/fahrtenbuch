@@ -33,17 +33,27 @@
             width: 100%;
         }
 
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .app-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+            border-radius: 18px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
         h1 {
             color: #333;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             font-size: 28px;
-            text-align: center;
         }
 
         .subtitle {
-            text-align: center;
             color: #666;
-            margin-bottom: 30px;
             font-size: 14px;
         }
 
@@ -186,6 +196,11 @@
                 padding: 20px;
             }
             
+            .app-logo {
+                width: 70px;
+                height: 70px;
+            }
+            
             h1 {
                 font-size: 24px;
             }
@@ -251,8 +266,11 @@
     </div>
 
     <div class="container">
-        <h1>🚗 Fahrtenbuch</h1>
-        <p class="subtitle">Tankstellen-Eintrag erfassen</p>
+        <div class="header">
+            <img src="/fahrtenbuch/icon-192.png" alt="Fahrtenbuch Logo" class="app-logo">
+            <h1>Fahrtenbuch</h1>
+            <p class="subtitle">Tankstellen-Eintrag erfassen</p>
+        </div>
 
         <!-- Message Box -->
         <div id="messageBox"></div>
