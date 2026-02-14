@@ -1,4 +1,4 @@
-// Fahrtenbuch App - Version mit Anti-Doppelklick-Schutz
+// Fahrtenbuch App - Version 2.6 - Fix für doppelte Einträge
 
 const DB_NAME = 'FahrtenbuchDB';
 const DB_VERSION = 2;
@@ -7,6 +7,7 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-e
 
 let db;
 let isSubmitting = false; // Debouncing-Flag
+let currentlySyncing = new Set(); // Track welche IDs gerade synchronisiert werden
 
 // IndexedDB initialisieren
 async function initDB() {
@@ -94,46 +95,65 @@ async function getUnsyncedEntries() {
 
 // Mit Google Sheets synchronisieren
 async function syncToGoogleSheets(entryId) {
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(entryId);
+    // Verhindere doppelte Sync-Versuche für denselben Entry
+    if (currentlySyncing.has(entryId)) {
+        console.log('⚠ Entry', entryId, 'wird bereits synchronisiert, überspringe...');
+        return;
+    }
 
-    return new Promise((resolve, reject) => {
-        request.onsuccess = async () => {
-            const entry = request.result;
-            if (!entry) {
-                reject(new Error('Entry nicht gefunden'));
-                return;
-            }
+    currentlySyncing.add(entryId);
 
-            try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        datum: entry.datum,
-                        kategorie: entry.kategorie,
-                        kmStand: parseGermanNumber(entry.kmStand),
-                        kmTrip: parseGermanNumber(entry.kmTrip),
-                        spritLiter: parseGermanNumber(entry.spritLiter),
-                        kosten: parseGermanNumber(entry.kosten),
-                        preisJeLiter: parseGermanNumber(entry.preisJeLiter),
-                        tankstelle: entry.tankstelle,
-                        bemerkung: entry.bemerkung
-                    })
-                });
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(entryId);
 
-                await markAsSynced(entryId);
-                resolve(response);
-            } catch (error) {
-                reject(error);
-            }
-        };
-        request.onerror = () => reject(request.error);
-    });
+        return new Promise((resolve, reject) => {
+            request.onsuccess = async () => {
+                const entry = request.result;
+                if (!entry) {
+                    currentlySyncing.delete(entryId);
+                    reject(new Error('Entry nicht gefunden'));
+                    return;
+                }
+
+                try {
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            datum: entry.datum,
+                            kategorie: entry.kategorie,
+                            kmStand: parseGermanNumber(entry.kmStand),
+                            kmTrip: parseGermanNumber(entry.kmTrip),
+                            spritLiter: parseGermanNumber(entry.spritLiter),
+                            kosten: parseGermanNumber(entry.kosten),
+                            preisJeLiter: parseGermanNumber(entry.preisJeLiter),
+                            tankstelle: entry.tankstelle,
+                            bemerkung: entry.bemerkung
+                        })
+                    });
+
+                    await markAsSynced(entryId);
+                    currentlySyncing.delete(entryId);
+                    resolve(response);
+                } catch (error) {
+                    currentlySyncing.delete(entryId);
+                    reject(error);
+                }
+            };
+            request.onerror = () => {
+                currentlySyncing.delete(entryId);
+                reject(request.error);
+            };
+        });
+    } catch (error) {
+        currentlySyncing.delete(entryId);
+        throw error;
+    }
 }
 
 // Auto-Sync für unsynchronisierte Einträge
@@ -144,6 +164,12 @@ async function autoSync() {
         const unsyncedEntries = await getUnsyncedEntries();
         
         for (const entry of unsyncedEntries) {
+            // Überspringe Entries die gerade synchronisiert werden
+            if (currentlySyncing.has(entry.id)) {
+                console.log('Auto-Sync: Entry', entry.id, 'wird bereits synchronisiert, überspringe...');
+                continue;
+            }
+
             try {
                 await syncToGoogleSheets(entry.id);
                 console.log('Auto-Sync erfolgreich für Entry:', entry.id);
