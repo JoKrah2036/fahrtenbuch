@@ -58,7 +58,6 @@
             font-size: 14px;
         }
 
-        /* Version Badge */
         .version-badge {
             display: inline-block;
             background: #667eea;
@@ -71,7 +70,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Pending Badge */
         .pending-badge {
             position: absolute;
             top: 0;
@@ -97,6 +95,15 @@
 
         .form-group {
             margin-bottom: 20px;
+            transition: opacity 0.3s;
+        }
+
+        .form-group.hidden {
+            display: none;
+        }
+
+        .form-group.optional {
+            opacity: 0.7;
         }
 
         label {
@@ -105,6 +112,16 @@
             color: #555;
             font-weight: 500;
             font-size: 14px;
+        }
+
+        label .required {
+            color: #f44336;
+        }
+
+        label .optional-hint {
+            color: #999;
+            font-weight: 400;
+            font-size: 12px;
         }
 
         input, select, textarea {
@@ -157,7 +174,6 @@
             transform: translateY(0);
         }
 
-        /* Footer */
         .footer {
             text-align: center;
             margin-top: 20px;
@@ -167,7 +183,6 @@
             font-size: 12px;
         }
 
-        /* Loading Overlay */
         #loadingOverlay {
             display: none;
             position: fixed;
@@ -203,7 +218,6 @@
             font-weight: 500;
         }
 
-        /* Message Box */
         #messageBox {
             display: none;
             padding: 15px;
@@ -238,7 +252,6 @@
             border: 1px solid #bee5eb;
         }
 
-        /* Responsive */
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -267,7 +280,6 @@
     </style>
 </head>
 <body>
-    <!-- Loading Overlay -->
     <div id="loadingOverlay">
         <div class="spinner"></div>
         <p>Speichere Eintrag...</p>
@@ -282,17 +294,16 @@
             <div class="version-badge">Version 2.8</div>
         </div>
 
-        <!-- Message Box -->
         <div id="messageBox"></div>
 
         <form id="fahrtenbuchForm">
             <div class="form-group">
-                <label for="datum">Datum *</label>
+                <label for="datum">Datum <span class="required">*</span></label>
                 <input type="date" id="datum" name="datum" required>
             </div>
 
             <div class="form-group">
-                <label for="kategorie">Kategorie *</label>
+                <label for="kategorie">Kategorie <span class="required">*</span></label>
                 <select id="kategorie" name="kategorie" required>
                     <option value="Tanken">Tanken</option>
                     <option value="Sonderfahrt">Sonderfahrt</option>
@@ -302,37 +313,37 @@
             </div>
 
             <div class="form-group">
-                <label for="kmStand">Km-Stand *</label>
+                <label for="kmStand">Km-Stand <span class="required">*</span></label>
                 <input type="text" id="kmStand" name="kmStand" placeholder="z.B. 123.456" required>
             </div>
 
-            <div class="form-group">
-                <label for="kmTrip">Km-Trip</label>
+            <div class="form-group" id="group-kmTrip">
+                <label for="kmTrip">Km-Trip <span class="optional-hint">(optional)</span></label>
                 <input type="text" id="kmTrip" name="kmTrip" placeholder="z.B. 450">
             </div>
 
-            <div class="form-group">
-                <label for="spritLiter">Sprit Liter</label>
+            <div class="form-group" id="group-spritLiter">
+                <label for="spritLiter">Sprit Liter <span class="optional-hint">(optional)</span></label>
                 <input type="text" id="spritLiter" name="spritLiter" placeholder="z.B. 35,42">
             </div>
 
-            <div class="form-group">
-                <label for="kosten">Kosten (€)</label>
+            <div class="form-group" id="group-kosten">
+                <label for="kosten">Kosten (€) <span class="optional-hint">(optional)</span></label>
                 <input type="text" id="kosten" name="kosten" placeholder="z.B. 50,00">
             </div>
 
-            <div class="form-group">
-                <label for="preisJeLiter">Preis je Liter (€)</label>
+            <div class="form-group" id="group-preisJeLiter">
+                <label for="preisJeLiter">Preis je Liter (€) <span class="optional-hint">(optional)</span></label>
                 <input type="text" id="preisJeLiter" name="preisJeLiter" placeholder="z.B. 1,419">
             </div>
 
-            <div class="form-group">
-                <label for="tankstelle">Tankstelle / Ort</label>
+            <div class="form-group" id="group-tankstelle">
+                <label for="tankstelle">Tankstelle / Ort <span class="optional-hint">(optional)</span></label>
                 <input type="text" id="tankstelle" name="tankstelle" placeholder="z.B. Shell, Aral">
             </div>
 
             <div class="form-group">
-                <label for="bemerkung">Bemerkung</label>
+                <label for="bemerkung">Bemerkung <span class="optional-hint">(optional)</span></label>
                 <textarea id="bemerkung" name="bemerkung" placeholder="Optional: Zusätzliche Notizen"></textarea>
             </div>
 
