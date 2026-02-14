@@ -3,7 +3,7 @@
 const DB_NAME = 'FahrtenbuchDB';
 const DB_VERSION = 2;
 const STORE_NAME = 'entries';
-const GOOGLE_SCRIPT_URL = 'DEINE_GOOGLE_SCRIPT_URL_HIER'; // TODO: Ersetzen mit deiner URL
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-eD72ziXaRTMxwi7tfFRYOf4sXc0aFqL0YzUz8bbqSxZUUHf30SSCoW1/exec';
 
 let db;
 let isSubmitting = false; // Debouncing-Flag
