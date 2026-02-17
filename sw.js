@@ -1,5 +1,5 @@
 // Service Worker für Fahrtenbuch PWA - Optimiert für Offline-First
-const CACHE_VERSION = 'v8'; // VERSION ERHÖHT: Performance-Optimierungen
+const CACHE_VERSION = 'v9'; // VERSION ERHÖHT: Performance-Optimierungen
 const urlsToCache = [
     '/fahrtenbuch/',
     '/fahrtenbuch/index.html',
