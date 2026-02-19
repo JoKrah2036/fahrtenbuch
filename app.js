@@ -165,6 +165,7 @@ async function syncToGoogleSheets(entryId) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     uniqueId: entry.uniqueId, // ← WICHTIG: Unique ID mitschicken!
+                    timestamp: entry.timestamp, // ← NEU: Timestamp für korrekte Reihenfolge
                     datum: entry.datum,
                     kategorie: entry.kategorie,
                     kmStand: parseGermanNumber(entry.kmStand),
