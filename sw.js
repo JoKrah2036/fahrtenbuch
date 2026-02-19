@@ -1,5 +1,5 @@
-// Service Worker für Fahrtenbuch PWA - Optimiert für Offline-First
-const CACHE_VERSION = 'v9'; // VERSION ERHÖHT: Performance-Optimierungen
+// Service Worker für Fahrtenbuch PWA - Version 3.0
+const CACHE_VERSION = 'v10'; // VERSION ERHÖHT für v3.0
 const urlsToCache = [
     '/fahrtenbuch/',
     '/fahrtenbuch/index.html',
@@ -9,23 +9,22 @@ const urlsToCache = [
     '/fahrtenbuch/icon-512.png'
 ];
 
-// Installation - Aggressive Caching
+// Installation
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_VERSION)
             .then((cache) => {
                 console.log('✓ Cache geöffnet:', CACHE_VERSION);
-                // Alle Dateien sofort cachen
                 return cache.addAll(urlsToCache);
             })
             .then(() => {
                 console.log('✓ Alle Dateien gecacht');
-                return self.skipWaiting(); // Sofort aktivieren
+                return self.skipWaiting();
             })
     );
 });
 
-// Aktivierung - Alte Caches aggressiv löschen
+// Aktivierung
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
@@ -39,12 +38,12 @@ self.addEventListener('activate', (event) => {
             );
         }).then(() => {
             console.log('✓ Service Worker aktiviert');
-            return self.clients.claim(); // Kontrolle übernehmen
+            return self.clients.claim();
         })
     );
 });
 
-// Fetch - CACHE FIRST für sofortiges Laden (Offline-First)
+// Fetch - CACHE FIRST für sofortiges Laden
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     
@@ -54,33 +53,28 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // CACHE-FIRST Strategie: Sofort aus Cache laden
+    // CACHE-FIRST Strategie
     event.respondWith(
         caches.match(event.request)
             .then((cachedResponse) => {
-                // Wenn im Cache gefunden → SOFORT zurückgeben
                 if (cachedResponse) {
-                    // Parallel: Im Hintergrund Network-Request für Update
+                    // Im Hintergrund Update holen
                     fetch(event.request)
                         .then((networkResponse) => {
-                            // Erfolgreiche Network-Response → Cache aktualisieren
                             if (networkResponse && networkResponse.status === 200) {
                                 caches.open(CACHE_VERSION).then((cache) => {
                                     cache.put(event.request, networkResponse.clone());
                                 });
                             }
                         })
-                        .catch(() => {
-                            // Network-Fehler ignorieren, Cache ist bereits ausgeliefert
-                        });
+                        .catch(() => {});
                     
-                    return cachedResponse; // SOFORT aus Cache
+                    return cachedResponse;
                 }
 
-                // Nicht im Cache → Netzwerk-Request
+                // Nicht im Cache → Netzwerk
                 return fetch(event.request)
                     .then((networkResponse) => {
-                        // Erfolgreiche Response → In Cache speichern
                         if (networkResponse && networkResponse.status === 200) {
                             const responseToCache = networkResponse.clone();
                             caches.open(CACHE_VERSION).then((cache) => {
@@ -90,7 +84,6 @@ self.addEventListener('fetch', (event) => {
                         return networkResponse;
                     })
                     .catch(() => {
-                        // Netzwerkfehler → Fallback (z.B. Offline-Seite)
                         console.log('❌ Netzwerkfehler für:', event.request.url);
                         return new Response('Offline', { status: 503 });
                     });

@@ -1,13 +1,18 @@
-// Fahrtenbuch App - Version 2.9 - Definitiver Fix für doppelte Einträge
+// Fahrtenbuch App - Version 3.0 - Unique IDs (Idempotente API)
 
 const DB_NAME = 'FahrtenbuchDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3; // ERHÖHT für neues Schema
 const STORE_NAME = 'entries';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYycEZz5HC-eD72ziXaRTMxwi7tfFRYOf4sXc0aFqL0YzUz8bbqSxZUUHf30SSCoW1/exec';
 
 let db;
 let isSubmitting = false;
 let currentlySyncing = new Set();
+
+// Eindeutige ID generieren (Timestamp + Random)
+function generateUniqueId() {
+    return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
 
 // IndexedDB initialisieren
 async function initDB() {
@@ -17,10 +22,27 @@ async function initDB() {
         request.onsuccess = () => { db = request.result; resolve(db); };
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
+            
+            // Wenn Store existiert und wir upgraden, alte Daten migrieren
+            if (event.oldVersion < 3) {
+                if (db.objectStoreNames.contains(STORE_NAME)) {
+                    // Alte Daten behalten, Store wird automatisch mit neuem Schema erweitert
+                    console.log('✓ Migriere zu v3 (mit uniqueId)');
+                }
+            }
+            
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
                 objectStore.createIndex('synced', 'synced', { unique: false });
                 objectStore.createIndex('datum', 'datum', { unique: false });
+                objectStore.createIndex('uniqueId', 'uniqueId', { unique: true }); // NEU!
+            } else {
+                // Store existiert, aber wir brauchen neuen Index
+                const transaction = event.currentTarget.transaction;
+                const store = transaction.objectStore(STORE_NAME);
+                if (!store.indexNames.contains('uniqueId')) {
+                    store.createIndex('uniqueId', 'uniqueId', { unique: false });
+                }
             }
         };
     });
@@ -74,7 +96,7 @@ async function saveEntry(entry) {
     });
 }
 
-// Sync-Status setzen (true = synced, false = unsynced)
+// Sync-Status setzen
 async function setSyncStatus(entryId, synced) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
@@ -109,23 +131,16 @@ async function getUnsyncedEntries() {
 }
 
 // MIT GOOGLE SHEETS SYNCHRONISIEREN
-// WICHTIG: Entry wird VOR dem Senden als "synced" markiert!
-// Bei Fehler: Zurücksetzen auf "unsynced"
+// WICHTIG: Sendet uniqueId mit - Server prüft auf Duplikate
 async function syncToGoogleSheets(entryId) {
-
-    // Verhindere parallele Sync-Versuche für dieselbe ID
     if (currentlySyncing.has(entryId)) {
-        console.log('⚠ Entry', entryId, 'wird bereits synchronisiert, überspringe...');
+        console.log('⚠ Entry', entryId, 'wird bereits synchronisiert');
         return;
     }
     currentlySyncing.add(entryId);
 
     try {
-        // SCHRITT 1: SOFORT als synced markieren (VOR dem Fetch!)
-        // Verhindert dass Auto-Sync denselben Entry nochmal sendet
-        await setSyncStatus(entryId, true);
-
-        // SCHRITT 2: Entry aus IndexedDB lesen
+        // Entry aus IndexedDB lesen
         const entry = await new Promise((resolve, reject) => {
             const transaction = db.transaction([STORE_NAME], 'readonly');
             const store = transaction.objectStore(STORE_NAME);
@@ -139,7 +154,7 @@ async function syncToGoogleSheets(entryId) {
             return;
         }
 
-        // SCHRITT 3: Fetch mit Timeout (5 Sekunden)
+        // Fetch mit Timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -149,6 +164,7 @@ async function syncToGoogleSheets(entryId) {
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    uniqueId: entry.uniqueId, // ← WICHTIG: Unique ID mitschicken!
                     datum: entry.datum,
                     kategorie: entry.kategorie,
                     kmStand: parseGermanNumber(entry.kmStand),
@@ -163,25 +179,25 @@ async function syncToGoogleSheets(entryId) {
             });
 
             clearTimeout(timeoutId);
-            console.log('✓ Entry', entryId, 'erfolgreich synchronisiert');
+            
+            // Als synced markieren (Server hat Duplikat-Schutz, also sicher)
+            await setSyncStatus(entryId, true);
+            console.log('✓ Entry', entryId, 'synchronisiert (uniqueId:', entry.uniqueId + ')');
 
         } catch (fetchError) {
             clearTimeout(timeoutId);
-            // SCHRITT 4: Bei Fehler → Zurücksetzen auf unsynced für späteren Retry
-            console.log('⚠ Fetch-Fehler für Entry', entryId, '- setze zurück auf unsynced');
-            await setSyncStatus(entryId, false);
+            console.log('⚠ Fetch-Fehler für Entry', entryId, '- Retry später');
+            // NICHT als synced markieren - wird beim nächsten Auto-Sync erneut versucht
         }
 
     } catch (error) {
-        // Bei allgemeinem Fehler → Zurücksetzen
         console.error('❌ Sync-Fehler für Entry', entryId, error);
-        try { await setSyncStatus(entryId, false); } catch (e) {}
     } finally {
         currentlySyncing.delete(entryId);
     }
 }
 
-// Auto-Sync für unsynchronisierte Einträge
+// Auto-Sync
 async function autoSync() {
     if (!navigator.onLine) return;
 
@@ -202,7 +218,7 @@ async function autoSync() {
     }
 }
 
-// Pending-Badge aktualisieren
+// Pending-Badge
 function updatePendingBadge(count) {
     const badge = document.getElementById('pendingBadge');
     if (!badge) return;
@@ -214,7 +230,7 @@ function updatePendingBadge(count) {
     }
 }
 
-// UI Helper Functions
+// UI Helper
 function setButtonState(state) {
     const btn = document.querySelector('button[type="submit"]');
     if (!btn) return;
@@ -264,7 +280,7 @@ async function handleSubmit(e) {
     e.preventDefault();
 
     if (isSubmitting) {
-        showMessage('Bereits am Speichern... Bitte warten.', 'warning');
+        showMessage('Bereits am Speichern...', 'warning');
         return;
     }
 
@@ -275,6 +291,7 @@ async function handleSubmit(e) {
 
     try {
         const entry = {
+            uniqueId: generateUniqueId(), // ← NEU: Eindeutige ID generieren!
             datum: form.datum.value,
             kategorie: form.kategorie.value,
             kmStand: form.kmStand.value,
@@ -288,18 +305,18 @@ async function handleSubmit(e) {
             timestamp: new Date().toISOString()
         };
 
-        // SCHRITT 1: In IndexedDB speichern
+        // In IndexedDB speichern
         const entryId = await saveEntry(entry);
-        console.log('✓ In IndexedDB gespeichert:', entryId);
+        console.log('✓ Gespeichert:', entryId, '| uniqueId:', entry.uniqueId);
 
-        // SCHRITT 2: SOFORT Formular leeren (Optimistisches UI)
+        // SOFORT Formular leeren (Optimistisches UI)
         form.reset();
         form.datum.value = new Date().toISOString().split('T')[0];
         updateFieldsForCategory();
         setButtonState('success');
         showMessage('Gespeichert! Wird synchronisiert...', 'success');
 
-        // SCHRITT 3: Im Hintergrund synchronisieren (nicht blockierend)
+        // Im Hintergrund synchronisieren
         if (navigator.onLine) {
             syncToGoogleSheets(entryId)
                 .then(() => getUnsyncedEntries().then(e => updatePendingBadge(e.length)))
@@ -310,7 +327,7 @@ async function handleSubmit(e) {
 
     } catch (error) {
         console.error('❌ Fehler beim Speichern:', error);
-        showMessage('Fehler beim Speichern! Bitte erneut versuchen.', 'error');
+        showMessage('Fehler beim Speichern!', 'error');
         setButtonState('error');
     } finally {
         isSubmitting = false;
@@ -319,16 +336,14 @@ async function handleSubmit(e) {
 
 // Online/Offline Status
 function updateOnlineStatus() {
-    if (navigator.onLine) {
-        autoSync();
-    }
+    if (navigator.onLine) autoSync();
 }
 
 // App initialisieren
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initDB();
-        console.log('✓ IndexedDB initialisiert');
+        console.log('✓ IndexedDB initialisiert (v3 mit uniqueId)');
 
         const form = document.getElementById('fahrtenbuchForm');
         if (form) {
@@ -349,7 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Auto-Sync alle 10 Sekunden
         setInterval(autoSync, 10000);
 
-        // Sofort prüfen beim App-Start
+        // Sofort prüfen beim Start
         const unsyncedEntries = await getUnsyncedEntries();
         if (unsyncedEntries.length > 0) {
             updatePendingBadge(unsyncedEntries.length);

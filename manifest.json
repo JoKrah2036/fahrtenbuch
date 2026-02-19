@@ -2,7 +2,7 @@
   "name": "Fahrtenbuch",
   "short_name": "Fahrtenbuch",
   "description": "Tankstellen-Einträge erfassen und mit Google Sheets synchronisieren",
-  "version": "2.9",
+  "version": "3.0",
   "start_url": "/fahrtenbuch/",
   "scope": "/fahrtenbuch/",
   "display": "standalone",
